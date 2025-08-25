@@ -1946,7 +1946,7 @@ Chat = {
               if (!message.params[1])
                 return;
               var channelName = message.params[0].substring(1); // Remove the '#' from the channel name
-              var nick = message.prefix.split("@")[0].split("!")[0];
+              var nick = message.prefix.split("@")[0].split("!")[0].replace(" ", "").replace(`\s`, '').trim();
 
               // Handle messages from johnnycyan's channel
               if (Chat.info.channel != "johnnycyan") {
