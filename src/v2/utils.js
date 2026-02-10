@@ -140,6 +140,9 @@ function TwitchAPI(url) {
       var $chatLine = $('<div style="color: red;">Twitch API Error</div>');
       console.log(result);
       Chat.info.lines.push($chatLine.wrap("<div>").parent().html());
+      setTimeout(() => {
+        window.location.reload();
+      }, 30000);
     },
   });
 }

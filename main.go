@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -358,6 +359,7 @@ func TwitchOAuthHandler(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		logTwitchError("TwitchOAuthHandler Do", err, "")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -374,6 +376,7 @@ func TwitchOAuthHandler(w http.ResponseWriter, r *http.Request) {
 			TwitchOAuthHandler(w, r)
 		} else {
 			body, _ := io.ReadAll(resp.Body)
+			logTwitchError("TwitchOAuthHandler Status", fmt.Errorf("Status %d", resp.StatusCode), string(body))
 			http.Error(w, string(body), resp.StatusCode)
 			return
 		}
@@ -402,6 +405,7 @@ func TwitchGetUserIDforUsernameHandler(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		logTwitchError("TwitchGetUserID Do", err, "")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -419,6 +423,7 @@ func TwitchGetUserIDforUsernameHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			body, _ := io.ReadAll(resp.Body)
 			log.Println(string(body))
+			logTwitchError("TwitchGetUserID Status", fmt.Errorf("Status %d", resp.StatusCode), string(body))
 			http.Error(w, string(body), resp.StatusCode)
 			return
 		}
@@ -448,6 +453,7 @@ func TwitchAPIHandler(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		logTwitchError("TwitchAPIHandler Do", err, "")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -464,6 +470,7 @@ func TwitchAPIHandler(w http.ResponseWriter, r *http.Request) {
 			TwitchAPIHandler(w, r)
 		} else {
 			body, _ := io.ReadAll(resp.Body)
+			logTwitchError("TwitchAPIHandler Status", fmt.Errorf("Status %d", resp.StatusCode), string(body))
 			http.Error(w, string(body), resp.StatusCode)
 			return
 		}
@@ -580,6 +587,18 @@ func refreshTokenLoop() {
 	}
 }
 
+func logTwitchError(context string, err error, body string) {
+	f, fileErr := os.OpenFile("twitch_errors.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if fileErr != nil {
+		log.Println("Failed to open twitch_errors.log:", fileErr)
+		return
+	}
+	defer f.Close()
+
+	logger := log.New(f, "", log.LstdFlags)
+	logger.Printf("[%s] Error: %v | Body: %s\n", context, err, body)
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // Be careful with this in production
@@ -617,22 +636,43 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer youtubeConn.Close()
 
-	// Bidirectional relay (same as before)
-	go relay(clientConn, youtubeConn)
-	relay(youtubeConn, clientConn)
+	// Bidirectional relay
+	errChan := make(chan error, 2)
+	go func() {
+		errChan <- relay(clientConn, youtubeConn, "Client->YouTube", channel)
+	}()
+	go func() {
+		errChan <- relay(youtubeConn, clientConn, "YouTube->Client", channel)
+	}()
+
+	// Wait for the first error/closure
+	<-errChan
 }
 
-func relay(src, dst *websocket.Conn) {
+func relay(src, dst *websocket.Conn, direction, channelID string) error {
 	for {
 		messageType, message, err := src.ReadMessage()
 		if err != nil {
-			log.Println("Read error:", err)
-			return
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				return nil
+			}
+			// Improve "use of closed network connection" check
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				return nil
+			}
+			log.Printf("[%s] Channel %s Read error: %v", direction, channelID, err)
+			return err
 		}
 		err = dst.WriteMessage(messageType, message)
 		if err != nil {
-			log.Println("Write error:", err)
-			return
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				return nil
+			}
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				return nil
+			}
+			log.Printf("[%s] Channel %s Write error: %v", direction, channelID, err)
+			return err
 		}
 	}
 }
