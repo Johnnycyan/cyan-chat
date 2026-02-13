@@ -811,8 +811,29 @@ func handleSharedChatEvents(w http.ResponseWriter, r *http.Request) {
 			// Client disconnected
 			esc.SSEMutex.Lock()
 			delete(esc.SSEClients, eventChan)
+			remainingClients := len(esc.SSEClients)
 			esc.SSEMutex.Unlock()
-			log.Printf("[TEMP DEBUG][SharedChat] SSE client disconnected for channel %s", channelID)
+			log.Printf("[TEMP DEBUG][SharedChat] SSE client disconnected for channel %s (%d clients remaining)", channelID, remainingClients)
+
+			// If no more SSE clients, stop EventSub after a grace period
+			if remainingClients == 0 {
+				go func() {
+					time.Sleep(30 * time.Second) // Grace period for reconnects
+					eventSubMutex.RLock()
+					currentEsc, exists := eventSubChannels[channelID]
+					eventSubMutex.RUnlock()
+					if !exists {
+						return
+					}
+					currentEsc.SSEMutex.Lock()
+					clientCount := len(currentEsc.SSEClients)
+					currentEsc.SSEMutex.Unlock()
+					if clientCount == 0 {
+						log.Printf("[TEMP DEBUG][SharedChat] No SSE clients for channel %s after grace period, stopping EventSub", channelID)
+						stopEventSubForChannel(channelID)
+					}
+				}()
+			}
 			return
 		case event := <-eventChan:
 			data, err := json.Marshal(event)
