@@ -174,7 +174,7 @@ function seven_ws(channel) {
                                                 }));
                                             }
                                         }
-                                        
+
                                         if (emoteEvent.d.body.updated[i].value.length > 0) { // added emote origin
                                             for (var j = 0; j < emoteEvent.d.body.updated[i].value.length; j++) { // loop through all added origins
                                                 origin = emoteEvent.d.body.updated[i].value[j].id;
@@ -196,7 +196,7 @@ function seven_ws(channel) {
                                     console.log("Cyan Chat: Emote origin changed, refreshing emotes...");
                                     return
                                 }
-                                
+
                                 console.log(`[${channel}] Renamed: ${emoteEvent.d.body.updated[0].old_value.name} to ${emoteEvent.d.body.updated[0].value.name}`);
                                 SendInfoText(`Renamed: ${emoteEvent.d.body.updated[0].old_value.name} to ${emoteEvent.d.body.updated[0].value.name}`);
                                 delete Chat.info.emotes[emoteEvent.d.body.updated[0].old_value.name];
@@ -297,3 +297,129 @@ function seven_ws(channel) {
 // const channelId = 'your_channel_id';
 // const channelName = 'your_channel_name';
 // ws(channelId, channelName);
+
+// ============================================================
+// Shared Chat 7TV WebSocket Functions
+// ============================================================
+
+// Track shared chat 7TV WS connections for cleanup
+var sharedSevenWSConnections = {};
+
+function seven_ws_shared(channelName, channelID) {
+    console.log(`[TEMP DEBUG][SharedChat][7TV] Starting 7TV WS for shared channel ${channelName} (${channelID})`); // TEMPORARY DEBUG
+    (async () => {
+        try {
+            var info = await getUserInfo(channelID);
+            if (!info || info.id === null || info.emoteSetID === null) {
+                console.log(`[TEMP DEBUG][SharedChat][7TV] No 7TV info for ${channelName}, skipping WS`); // TEMPORARY DEBUG
+                return;
+            }
+
+            var emoteSetID = info.emoteSetID;
+
+            const options = {
+                debug: false,
+                reconnectInterval: 3000,
+                maxReconnectInterval: 30000,
+            };
+
+            const conn = new ReconnectingWebSocket('wss://events.7tv.io/v3', [], options);
+
+            // Store the connection for cleanup
+            sharedSevenWSConnections[channelID] = conn;
+            if (Chat.info.sharedChatChannels[channelID]) {
+                Chat.info.sharedChatChannels[channelID].sevenConn = conn;
+            }
+
+            conn.onopen = function () {
+                console.log(`[TEMP DEBUG][SharedChat][7TV] Connected to WS for ${channelName}`); // TEMPORARY DEBUG
+
+                // Subscribe to emote set events for the shared channel
+                conn.send(JSON.stringify({
+                    op: 35, // subscribe opcode
+                    d: {
+                        type: "emote_set.*",
+                        condition: {
+                            object_id: emoteSetID
+                        }
+                    }
+                }));
+            };
+
+            conn.onmessage = function (event) {
+                try {
+                    const msg = JSON.parse(event.data);
+
+                    // Skip non-dispatch messages
+                    if (msg.op !== 0) return;
+
+                    const channelData = Chat.info.sharedChatChannels[channelID];
+                    if (!channelData) {
+                        // Channel was cleaned up, close connection
+                        console.log(`[TEMP DEBUG][SharedChat][7TV] Channel ${channelName} data gone, closing WS`); // TEMPORARY DEBUG
+                        conn.close();
+                        return;
+                    }
+
+                    if (msg.d.type === "emote_set.update") {
+                        const emoteEvent = new EmoteChanged(msg);
+                        if (emoteEvent.d && emoteEvent.d.body) {
+                            if (emoteEvent.d.body.pushed && emoteEvent.d.body.pushed.length > 0) {
+                                const pushed = emoteEvent.d.body.pushed[0];
+                                const emoteData = pushed.value.data.host.files.pop();
+                                var link = `https:${pushed.value.data.host.url}/${emoteData.name}`;
+                                if (link.endsWith(".gif")) link = link.replace(".gif", ".webp");
+                                channelData.emotes[pushed.value.name] = {
+                                    id: pushed.value.id,
+                                    image: link,
+                                    zeroWidth: pushed.value.data.flags == 256,
+                                };
+                                console.log(`[TEMP DEBUG][SharedChat][7TV] Added emote in ${channelName}: ${pushed.value.name}`); // TEMPORARY DEBUG
+                            } else if (emoteEvent.d.body.pulled && emoteEvent.d.body.pulled.length > 0) {
+                                const pulled = emoteEvent.d.body.pulled[0];
+                                delete channelData.emotes[pulled.old_value.name];
+                                console.log(`[TEMP DEBUG][SharedChat][7TV] Removed emote in ${channelName}: ${pulled.old_value.name}`); // TEMPORARY DEBUG
+                            } else if (emoteEvent.d.body.updated && emoteEvent.d.body.updated.length > 0) {
+                                const updated = emoteEvent.d.body.updated[0];
+                                if (updated.key !== "origins") {
+                                    // Rename
+                                    delete channelData.emotes[updated.old_value.name];
+                                    const emoteData = updated.value.data.host.files.pop();
+                                    var link = `https:${updated.value.data.host.url}/${emoteData.name}`;
+                                    if (link.endsWith(".gif")) link = link.replace(".gif", ".webp");
+                                    channelData.emotes[updated.value.name] = {
+                                        id: updated.value.id,
+                                        image: link,
+                                        zeroWidth: updated.value.data.flags == 256,
+                                    };
+                                    console.log(`[TEMP DEBUG][SharedChat][7TV] Renamed emote in ${channelName}: ${updated.old_value.name} -> ${updated.value.name}`); // TEMPORARY DEBUG
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error(`[TEMP DEBUG][SharedChat][7TV] Error processing message for ${channelName}: ${error}`); // TEMPORARY DEBUG
+                }
+            };
+
+            conn.onclose = function (event) {
+                console.log(`[TEMP DEBUG][SharedChat][7TV] WS closed for ${channelName}. Reason: ${event.reason}`); // TEMPORARY DEBUG
+            };
+
+            conn.onerror = function (error) {
+                console.error(`[TEMP DEBUG][SharedChat][7TV] WS error for ${channelName}: ${error}`); // TEMPORARY DEBUG
+            };
+        } catch (error) {
+            console.error(`[TEMP DEBUG][SharedChat][7TV] Failed to start WS for ${channelName}: ${error}`); // TEMPORARY DEBUG
+        }
+    })();
+}
+
+function seven_ws_shared_close(channelID) {
+    console.log(`[TEMP DEBUG][SharedChat][7TV] Closing WS for channel ${channelID}`); // TEMPORARY DEBUG
+    const conn = sharedSevenWSConnections[channelID];
+    if (conn) {
+        conn.close();
+        delete sharedSevenWSConnections[channelID];
+    }
+}

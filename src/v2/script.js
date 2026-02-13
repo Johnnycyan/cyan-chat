@@ -167,16 +167,20 @@ Chat = {
     pronounCustomColors:
       "pronoun_custom_colors" in $.QueryString
         ? (() => {
-            try {
-              return JSON.parse(decodeURIComponent($.QueryString.pronoun_custom_colors));
-            } catch (e) {
-              console.warn("Failed to parse custom pronoun colors:", e);
-              return {};
-            }
-          })()
+          try {
+            return JSON.parse(decodeURIComponent($.QueryString.pronoun_custom_colors));
+          } catch (e) {
+            console.warn("Failed to parse custom pronoun colors:", e);
+            return {};
+          }
+        })()
         : {},
     pronouns: {},
     pronounTypes: {},
+    // Shared Chat state
+    sharedChatActive: false,
+    sharedChatChannels: {},  // { channelID: { name, emotes, ffzModBadge, ffzVipBadge, profileImage, sevenConn } }
+    sharedChatEventSource: null,
   },
 
   loadEmotes: function (channelID) {
@@ -271,6 +275,296 @@ Chat = {
     });
   },
 
+  // ============================================================
+  // Shared Chat Functions
+  // ============================================================
+
+  // TEMPORARY DEBUG - remove before production
+  startSharedChatListener: function () {
+    if (!Chat.info.channelID) {
+      console.log('[TEMP DEBUG][SharedChat] No channelID, skipping SSE listener');
+      return;
+    }
+
+    // Subscribe to shared chat events
+    fetch(`/api/shared-chat/subscribe?channel_id=${Chat.info.channelID}`);
+
+    // Connect to SSE endpoint
+    const eventSource = new EventSource(`/api/shared-chat/events?channel_id=${Chat.info.channelID}`);
+    Chat.info.sharedChatEventSource = eventSource;
+
+    eventSource.onmessage = function (event) {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('[TEMP DEBUG][SharedChat] SSE event received:', data.type, data); // TEMPORARY DEBUG
+
+        switch (data.type) {
+          case 'connected':
+            console.log('[TEMP DEBUG][SharedChat] SSE connected for channel', Chat.info.channelID);
+            break;
+
+          case 'begin':
+          case 'update': {
+            Chat.info.sharedChatActive = true;
+            console.log(`[TEMP DEBUG][SharedChat] Session ${data.type}: host=${data.host_login}, participants=${data.participants?.length}`);
+
+            // Load data for new participant channels
+            const currentChannelIDs = Object.keys(Chat.info.sharedChatChannels);
+            const newParticipantIDs = (data.participants || []).map(p => p.broadcaster_user_id);
+
+            // Add new channels
+            for (const participant of (data.participants || [])) {
+              // Skip our own channel
+              if (participant.broadcaster_user_id === Chat.info.channelID) continue;
+              if (!Chat.info.sharedChatChannels[participant.broadcaster_user_id]) {
+                console.log(`[TEMP DEBUG][SharedChat] Loading data for new channel: ${participant.broadcaster_user_login} (${participant.broadcaster_user_id})`);
+                Chat.loadSharedChatChannelData(participant.broadcaster_user_id, participant.broadcaster_user_login);
+              }
+            }
+
+            // On update, cleanup channels no longer in participant list
+            if (data.type === 'update') {
+              for (const channelID of currentChannelIDs) {
+                if (!newParticipantIDs.includes(channelID)) {
+                  console.log(`[TEMP DEBUG][SharedChat] Channel ${channelID} left session, cleaning up`);
+                  Chat.cleanupSharedChatChannel(channelID);
+                }
+              }
+            }
+            break;
+          }
+
+          case 'end':
+            console.log('[TEMP DEBUG][SharedChat] Session ended');
+            Chat.cleanupAllSharedChat();
+            break;
+        }
+      } catch (e) {
+        console.error('[TEMP DEBUG][SharedChat] Error processing SSE event:', e);
+      }
+    };
+
+    eventSource.onerror = function (err) {
+      console.error('[TEMP DEBUG][SharedChat] SSE connection error:', err);
+    };
+  },
+
+  // Load emotes and badges for a shared chat channel
+  loadSharedChatChannelData: function (channelID, channelName) {
+    console.log(`[TEMP DEBUG][SharedChat] Loading channel data for ${channelName} (${channelID})`);
+
+    Chat.info.sharedChatChannels[channelID] = {
+      name: channelName,
+      emotes: {},
+      ffzModBadge: null,
+      ffzVipBadge: null,
+      profileImage: null,
+      sevenConn: null,
+    };
+
+    const channelData = Chat.info.sharedChatChannels[channelID];
+
+    // Load profile image for source badge
+    TwitchAPI(`/users?id=${channelID}`).done(function (res) {
+      if (res.data && res.data[0]) {
+        channelData.profileImage = res.data[0].profile_image_url;
+        console.log(`[TEMP DEBUG][SharedChat] Loaded profile image for ${channelName}`);
+      }
+    });
+
+    // Load BTTV FFZ-proxy channel emotes
+    $.getJSON(
+      addRandomQueryString(
+        'https://api.betterttv.net/3/cached/frankerfacez/users/twitch/' + encodeURIComponent(channelID)
+      )
+    ).done(function (res) {
+      res.forEach((emote) => {
+        if (emote.images['4x']) {
+          var imageUrl = emote.images['4x'];
+          var upscale = false;
+        } else {
+          var imageUrl = emote.images['2x'] || emote.images['1x'];
+          var upscale = true;
+        }
+        channelData.emotes[emote.code] = {
+          id: emote.id,
+          image: imageUrl,
+          upscale: upscale,
+        };
+      });
+      console.log(`[TEMP DEBUG][SharedChat] Loaded BTTV/FFZ emotes for ${channelName}: ${Object.keys(channelData.emotes).length}`);
+    });
+
+    // Load BTTV native channel emotes
+    $.getJSON(
+      addRandomQueryString('https://api.betterttv.net/3/cached/users/twitch/' + encodeURIComponent(channelID))
+    ).done(function (res) {
+      if (!Array.isArray(res)) {
+        res = res.channelEmotes.concat(res.sharedEmotes);
+      }
+      res.forEach((emote) => {
+        channelData.emotes[emote.code] = {
+          id: emote.id,
+          image: 'https://cdn.betterttv.net/emote/' + emote.id + '/3x',
+          zeroWidth: [
+            '5e76d338d6581c3724c0f0b2',
+            '5e76d399d6581c3724c0f0b8',
+            '567b5b520e984428652809b6',
+            '5849c9a4f52be01a7ee5f79d',
+            '567b5c080e984428652809ba',
+            '567b5dc00e984428652809bd',
+            '58487cc6f52be01a7ee5f205',
+            '5849c9c8f52be01a7ee5f79e',
+          ].includes(emote.id),
+        };
+      });
+      console.log(`[TEMP DEBUG][SharedChat] Loaded BTTV native emotes for ${channelName}`);
+    });
+
+    // Load 7TV channel emotes
+    $.getJSON(
+      addRandomQueryString('https://7tv.io/v3/users/twitch/' + encodeURIComponent(channelID))
+    ).done((res) => {
+      res?.emote_set?.emotes?.forEach((emote) => {
+        const emoteData = emote.data.host.files.pop();
+        var link = `https:${emote.data.host.url}/${emoteData.name}`;
+        if (link.endsWith('.gif')) link = link.replace('.gif', '.webp');
+        channelData.emotes[emote.name] = {
+          id: emote.id,
+          image: link,
+          zeroWidth: emote.data.flags == 256,
+        };
+      });
+      console.log(`[TEMP DEBUG][SharedChat] Loaded 7TV emotes for ${channelName}: ${Object.keys(channelData.emotes).length} total`);
+    });
+
+    // Load FFZ mod/vip badges for the shared channel
+    $.getJSON(
+      'https://api.frankerfacez.com/v1/_room/id/' + encodeURIComponent(channelID)
+    ).done(function (res) {
+      if (res.room.moderator_badge) {
+        const badgeUrl = 'https://cdn.frankerfacez.com/room-badge/mod/' + res.room.id + '/4/rounded';
+        fetch(badgeUrl)
+          .then((response) => {
+            if (response.status !== 404) {
+              channelData.ffzModBadge = badgeUrl;
+              console.log(`[TEMP DEBUG][SharedChat] Loaded FFZ mod badge for ${channelName}`);
+            }
+          })
+          .catch(() => { });
+      }
+      if (res.room.vip_badge) {
+        channelData.ffzVipBadge = 'https://cdn.frankerfacez.com/room-badge/vip/' + res.room.id + '/4';
+        console.log(`[TEMP DEBUG][SharedChat] Loaded FFZ vip badge for ${channelName}`);
+      }
+    });
+
+    // Start 7TV WS for this channel
+    if (typeof seven_ws_shared === 'function') {
+      seven_ws_shared(channelName, channelID);
+    }
+  },
+
+  // Get merged emote dictionary for a message (channel-specific + global)
+  getEmotesForMessage: function (info) {
+    const sourceRoomId = info['source-room-id'];
+    const roomId = info['room-id'];
+
+    if (sourceRoomId && sourceRoomId !== roomId) {
+      // Shared chat message from another channel
+      const channelData = Chat.info.sharedChatChannels[sourceRoomId];
+      if (channelData && channelData.emotes) {
+        // Merge: channel-specific emotes take priority over global
+        return Object.assign({}, Chat.info.emotes, channelData.emotes);
+      }
+    }
+    return Chat.info.emotes;
+  },
+
+  // Get badge URL, considering shared chat channel-specific FFZ badges
+  getBadgeUrl: function (info, badgeSetId, badgeVersion) {
+    const sourceRoomId = info['source-room-id'];
+    const roomId = info['room-id'];
+
+    if (sourceRoomId && sourceRoomId !== roomId) {
+      const channelData = Chat.info.sharedChatChannels[sourceRoomId];
+      if (channelData) {
+        // Check for FFZ custom mod/vip badge overrides
+        if (badgeSetId === 'moderator' && channelData.ffzModBadge) {
+          return channelData.ffzModBadge;
+        }
+        if (badgeSetId === 'vip' && channelData.ffzVipBadge) {
+          return channelData.ffzVipBadge;
+        }
+      }
+    }
+
+    // Fall back to global badge
+    return Chat.info.badges[badgeSetId + ':' + badgeVersion];
+  },
+
+  // Get source channel profile image for shared chat badge
+  getSharedChatProfileImage: function (sourceRoomId) {
+    const channelData = Chat.info.sharedChatChannels[sourceRoomId];
+    if (channelData && channelData.profileImage) {
+      return channelData.profileImage;
+    }
+    return null;
+  },
+
+  // Cleanup a single shared chat channel
+  cleanupSharedChatChannel: function (channelID) {
+    console.log(`[TEMP DEBUG][SharedChat] Cleaning up channel ${channelID}`);
+    const channelData = Chat.info.sharedChatChannels[channelID];
+    if (channelData) {
+      // Close 7TV WS
+      if (typeof seven_ws_shared_close === 'function') {
+        seven_ws_shared_close(channelID);
+      }
+    }
+    delete Chat.info.sharedChatChannels[channelID];
+  },
+
+  // Cleanup all shared chat state
+  cleanupAllSharedChat: function () {
+    console.log('[TEMP DEBUG][SharedChat] Cleaning up all shared chat state');
+    for (const channelID of Object.keys(Chat.info.sharedChatChannels)) {
+      Chat.cleanupSharedChatChannel(channelID);
+    }
+    Chat.info.sharedChatActive = false;
+  },
+
+  // Check if channel is already in a shared chat session on load
+  checkExistingSharedChat: function () {
+    if (!Chat.info.channelID) return;
+
+    console.log('[TEMP DEBUG][SharedChat] Checking for existing shared chat session...');
+    TwitchAPI('/shared_chat/session?broadcaster_id=' + Chat.info.channelID).done(function (res) {
+      if (res.data && res.data.length > 0) {
+        const session = res.data[0];
+        console.log('[TEMP DEBUG][SharedChat] Found existing session:', session.session_id, 'with', session.participants.length, 'participants');
+
+        Chat.info.sharedChatActive = true;
+
+        // Load data for each participant (skip our own channel)
+        for (const participant of session.participants) {
+          if (participant.broadcaster_id === Chat.info.channelID) continue;
+          if (!Chat.info.sharedChatChannels[participant.broadcaster_id]) {
+            console.log('[TEMP DEBUG][SharedChat] Loading existing participant:', participant.broadcaster_id);
+            // We need the login name — fetch it from the Twitch API
+            TwitchAPI('/users?id=' + participant.broadcaster_id).done(function (userRes) {
+              if (userRes.data && userRes.data[0]) {
+                Chat.loadSharedChatChannelData(participant.broadcaster_id, userRes.data[0].login);
+              }
+            });
+          }
+        }
+      } else {
+        console.log('[TEMP DEBUG][SharedChat] No existing shared chat session found');
+      }
+    });
+  },
+
   loadPersonalEmotes: async function (channelID) {
     var subbed = await isUserSubbed(channelID);
     if (!subbed) {
@@ -322,15 +616,15 @@ Chat = {
     }
   },
 
-  loadPronounTypes: function() {
+  loadPronounTypes: function () {
     if (Object.keys(Chat.info.pronounTypes).length === 0) {
-      $.getJSON(addRandomQueryString("styles/pronoun_types.json")).done(function(res) {
+      $.getJSON(addRandomQueryString("styles/pronoun_types.json")).done(function (res) {
         res.forEach((pronoun) => {
           Chat.info.pronounTypes[pronoun.name] = pronoun.display;
         });
         // Apply custom pronoun colors after types are loaded
         Chat.applyPronounColors();
-      }).fail(function() {
+      }).fail(function () {
         console.warn("Failed to load pronoun types");
       });
     } else {
@@ -339,13 +633,13 @@ Chat = {
     }
   },
 
-  applyPronounColors: function() {
+  applyPronounColors: function () {
     if (!Chat.info.showPronouns || Chat.info.pronounColorMode === "default") {
       return;
     }
-    
+
     let customCSS = '';
-    
+
     if (Chat.info.pronounColorMode === "single") {
       customCSS = `
         .pronoun {
@@ -364,7 +658,7 @@ Chat = {
         }
       });
     }
-    
+
     if (customCSS) {
       // Create or update style element for custom pronoun colors
       let styleElement = document.getElementById('custom-pronoun-colors');
@@ -377,7 +671,7 @@ Chat = {
     }
   },
 
-  getUserPronoun: function(username) {
+  getUserPronoun: function (username) {
     if (!Chat.info.showPronouns) {
       return;
     }
@@ -389,7 +683,7 @@ Chat = {
 
     // Fetch pronoun from API
     $.getJSON(`https://pronouns.alejo.io/api/users/${encodeURIComponent(username)}`)
-      .done(function(res) {
+      .done(function (res) {
         if (res && res.length > 0 && res[0].pronoun_id) {
           const pronounId = res[0].pronoun_id;
           const displayPronoun = Chat.info.pronounTypes[pronounId];
@@ -403,21 +697,21 @@ Chat = {
           Chat.info.pronouns[username] = null;
         }
       })
-      .fail(function() {
+      .fail(function () {
         // Cache empty result to avoid repeated API calls on failure
         Chat.info.pronouns[username] = null;
       });
   },
 
-  updatePronounsForUser: function(username, pronoun) {
+  updatePronounsForUser: function (username, pronoun) {
     // Update pronouns in existing chat messages for this user
     const $pronounElements = $(`.chat_line[data-nick="${username}"] .pronoun`);
-    $pronounElements.each(function() {
+    $pronounElements.each(function () {
       const $element = $(this);
       $element.text(pronoun);
-      
+
       // Find the pronoun type and apply the corresponding CSS class
-      const pronounType = Object.keys(Chat.info.pronounTypes).find(key => 
+      const pronounType = Object.keys(Chat.info.pronounTypes).find(key =>
         Chat.info.pronounTypes[key] === pronoun
       );
       if (pronounType) {
@@ -425,7 +719,7 @@ Chat = {
         $element.removeClass(Object.keys(Chat.info.pronounTypes).join(' '));
         $element.addClass(pronounType);
       }
-      
+
       $element.show();
     });
   },
@@ -449,6 +743,10 @@ Chat = {
         Chat.info.channelID = res.data[0].id;
         Chat.loadEmotes(Chat.info.channelID);
         seven_ws(Chat.info.channel);
+
+        // TEMPORARY DEBUG - Start shared chat SSE listener and check for existing session
+        Chat.startSharedChatListener();
+        Chat.checkExistingSharedChat();
 
         client_id = res.client_id;
 
@@ -478,11 +776,11 @@ Chat = {
       }
 
       if (Chat.info.size == 1) {
-        Chat.info.seven_scale = 20/14;
+        Chat.info.seven_scale = 20 / 14;
       } else if (Chat.info.size == 2) {
-        Chat.info.seven_scale = 34/14;
+        Chat.info.seven_scale = 34 / 14;
       } else if (Chat.info.size == 3) {
-        Chat.info.seven_scale = 48/14;
+        Chat.info.seven_scale = 48 / 14;
       }
 
       let emoteScale = 1;
@@ -498,8 +796,8 @@ Chat = {
         Chat.info.invert = false;
         Chat.info.sms = false;
         appendCSS("variant", "center");
-      } 
-      
+      }
+
       if (Chat.info.sms) {
         Chat.info.center = false;
         Chat.info.animate = false;
@@ -534,7 +832,7 @@ Chat = {
           let weight = weights[Chat.info.weight - 1];
           appendCSS("weight", weight);
         } else if (Chat.info.weight >= 100) {
-            $("#chat_container").css("font-weight", Chat.info.weight);
+          $("#chat_container").css("font-weight", Chat.info.weight);
         } else {
           let weight = weights[Chat.info.weight - 1];
           appendCSS("weight", weight);
@@ -555,7 +853,7 @@ Chat = {
         // Set CSS variable for scaling
         document.documentElement.style.setProperty('--scale', Chat.info.scale);
         // Update viewport to accommodate scaling
-        document.documentElement.style.setProperty('--inv-scale', 1/Chat.info.scale);
+        document.documentElement.style.setProperty('--inv-scale', 1 / Chat.info.scale);
       }
 
       // Load badges
@@ -1008,7 +1306,7 @@ Chat = {
                 backgroundImage: seventvPaintInfo.image_url
               };
             }
-            
+
             if (Chat.info.seventvPaints[nick]) {
               if (!Chat.info.seventvPaints[nick].includes(userPaint)) {
                 Chat.info.seventvPaints[nick] = [];
@@ -1029,7 +1327,7 @@ Chat = {
   getAlmostWhiteColor: function (color) {
     // Create a tinycolor object from the input color
     const baseColor = tinycolor(color);
-    
+
     // First desaturate the color (to reduce color intensity)
     // Then lighten it significantly (to make it almost white)
     return baseColor
@@ -1048,7 +1346,7 @@ Chat = {
       darkerColor = darkerColor.darken(5);
       colorIsReadable = tinycolor.isReadable("#ffffff", darkerColor, {});
     }
-    
+
     // Get RGB values from the color
     // const userColor = tinycolor(color);
     // Create a lighter version (40% lighter)
@@ -1060,20 +1358,20 @@ Chat = {
     }
     hsl.l = 90 / 100; // Convert percentage to [0,1] range
     var lighterColor = tinycolor(hsl).toString();
-    
+
     // Apply colors directly to elements using jQuery methods
     const $userInfo = $chatLine.find('.user_info');
     const $message = $chatLine.find('.message');
-    
+
     // Set background colors
     $userInfo.css('backgroundColor', darkerColor);
     $message.css('backgroundColor', lighterColor);
-    
+
     // Set the CSS variable using native DOM API for better compatibility
     if ($message.length) {
       $message[0].style.setProperty('--arrow-color', lighterColor);
     }
-    
+
     // split Chat.info.messageImage by commas to get all the possible images and then pick one at random
     if (!Chat.info.messageImage) {
       return $chatLine;
@@ -1092,7 +1390,7 @@ Chat = {
         $message.append($img);
       }
     }
-    
+
     // Return the jQuery object
     return $chatLine;
   },
@@ -1139,23 +1437,24 @@ Chat = {
         // End Special Badges
 
         if (info["source-room-id"] && info["source-room-id"] != info["room-id"]) {
-          // We are in shared chat, and the message didn't originate here, so we need to add the source badge
-          if (Chat.info.sharedBadge && Chat.info.sharedID && info["source-room-id"] == Chat.info.sharedID) {
-            // We already have the badge URL and it's the correct channel
+          // We are in shared chat — add the source channel profile image as a badge
+          const sourceProfileImage = Chat.getSharedChatProfileImage(info["source-room-id"]);
+          if (sourceProfileImage) {
             var $sourceBadge = $("<img/>");
             $sourceBadge.addClass("badge");
-            // Set the badge URL
-            $sourceBadge.attr("src", Chat.info.sharedBadge);
-              
-            // Append the badge to userInfo only after we have the URL
+            $sourceBadge.attr("src", sourceProfileImage);
             $userInfo.append($sourceBadge);
           } else {
-            // We don't have the badge URL yet, so we need to fetch it for the first time
+            // Profile image not loaded yet (channel data may still be loading)
+            // Fetch it directly as a fallback
             TwitchAPI(`/users?id=${info["source-room-id"]}`).done(
               function (res) {
-                sourceBadgeUrl = res.data[0].profile_image_url;
-                Chat.info.sharedBadge = sourceBadgeUrl;
-                Chat.info.sharedID = info["source-room-id"];
+                if (res.data && res.data[0]) {
+                  const channelData = Chat.info.sharedChatChannels[info["source-room-id"]];
+                  if (channelData) {
+                    channelData.profileImage = res.data[0].profile_image_url;
+                  }
+                }
               }
             );
           }
@@ -1186,7 +1485,7 @@ Chat = {
               } else {
                 badges.push({
                   description: badge[0],
-                  url: Chat.info.badges[badge[0] + ":" + badge[1]],
+                  url: Chat.getBadgeUrl(info, badge[0], badge[1]),
                   priority: priority,
                 });
               }
@@ -1285,7 +1584,7 @@ Chat = {
               // console.log("Detected existing stroke effect in paint shadows, disabling additional stroke");
               userShadow = "";
             }
-            
+
             // Categorize drop-shadows based on blur radius
             dropShadows.forEach(shadow => {
               // Extract the blur radius (third value in px)
@@ -1318,22 +1617,22 @@ Chat = {
 
             // console.log("Small blur shadows: ", smallBlurShadows);
             // console.log("Large blur shadows: ", largeBlurShadows);
-            
+
             // Reconstruct filter with the correct order
             // Small blur shadows + mentionShadow + large blur shadows
-            
+
             if (smallBlurShadows.length > 0) {
               finalFilter += smallBlurShadows.join(' ');
             }
-            
+
             if (userShadow) {
               finalFilter += userShadow;
             }
-            
+
             if (largeBlurShadows.length > 0) {
               finalFilter += ' ' + largeBlurShadows.join(' ');
             }
-            
+
             // Debug log to verify the filter string
           } else {
             finalFilter = userShadow;
@@ -1358,15 +1657,15 @@ Chat = {
         }
       } else {
         let userShadow = "";
-          if (Chat.info.stroke) {
-            // console.log("Stroke is " + Chat.info.stroke)
-            if (Chat.info.stroke === 1) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            } else if (Chat.info.stroke === 2) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            }
+        if (Chat.info.stroke) {
+          // console.log("Stroke is " + Chat.info.stroke)
+          if (Chat.info.stroke === 1) {
+            userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
+          } else if (Chat.info.stroke === 2) {
+            userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
           }
-          $username.css("filter", userShadow);
+        }
+        $username.css("filter", userShadow);
       }
 
       if (Chat.info.hideColon && !Chat.info.center) {
@@ -1379,13 +1678,17 @@ Chat = {
       if (Chat.info.showPronouns && service !== "youtube") {
         var $pronoun = $("<span></span>");
         $pronoun.addClass("pronoun");
-        
+        if (Chat.info.center) {
+          $pronoun.css("margin-right", "0.5em");
+          $pronoun.css("margin-left", "-0.2em");
+        }
+
         // Check if we have cached pronouns for this user
         const cachedPronoun = Chat.info.pronouns[nick];
         if (cachedPronoun) {
           $pronoun.text(cachedPronoun);
           // Find the pronoun type and apply the corresponding CSS class
-          const pronounType = Object.keys(Chat.info.pronounTypes).find(key => 
+          const pronounType = Object.keys(Chat.info.pronounTypes).find(key =>
             Chat.info.pronounTypes[key] === cachedPronoun
           );
           if (pronounType) {
@@ -1452,50 +1755,50 @@ Chat = {
         try {
           // Debug log for emote string format
           // console.log("[Emote Debug] Processing emotes string:", info.emotes);
-          
+
           info.emotes.split("/").forEach((emoteData) => {
             try {
               // Debug log for each emote data piece
               // console.log("[Emote Debug] Processing emote data:", emoteData);
-              
+
               // Defensive coding to prevent t[1] undefined error
               var twitchEmote = emoteData.split(":");
               // console.log("[Emote Debug] Split emote data:", twitchEmote);
-              
+
               // Check if we have both parts of the emote data
               if (twitchEmote.length < 2) {
                 // console.error("[Emote Debug] Invalid emote data format, missing colon separator:", emoteData);
                 return; // Skip this emote
               }
-              
+
               // More defensive coding for the indices
               var indexesData = twitchEmote[1].split(",")[0];
               if (!indexesData) {
                 // console.error("[Emote Debug] Invalid emote indices format:", twitchEmote[1]);
                 return; // Skip this emote
               }
-              
+
               var indexes = indexesData.split("-");
               if (indexes.length !== 2) {
                 // console.error("[Emote Debug] Invalid emote index range format:", indexesData);
                 return; // Skip this emote
               }
-              
+
               var emojis = new RegExp("[\u1000-\uFFFF]+", "g");
               var aux = message.replace(emojis, " ");
-              
+
               // Check if indices are within range
               const startIndex = parseInt(indexes[0]);
               const endIndex = parseInt(indexes[1]);
-              
+
               if (isNaN(startIndex) || isNaN(endIndex) || startIndex < 0 || endIndex >= aux.length || startIndex > endIndex) {
                 // console.error("[Emote Debug] Invalid index range:", startIndex, endIndex, "for message length:", aux.length);
                 return; // Skip this emote
               }
-              
+
               var emoteCode = aux.substr(startIndex, endIndex - startIndex + 1);
               // console.log("[Emote Debug] Successfully extracted emote code:", emoteCode);
-              
+
               replacements[emoteCode] =
                 '<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/' +
                 twitchEmote[0] +
@@ -1535,9 +1838,10 @@ Chat = {
           });
         }
 
-        // Check global emotes
+        // Check global emotes (channel-aware for shared chat)
         if (!isReplaced) {
-          Object.entries(Chat.info.emotes).forEach((emote) => {
+          const messageEmotes = Chat.getEmotesForMessage(info);
+          Object.entries(messageEmotes).forEach((emote) => {
             if (word === emote[0]) {
               let replacement;
               if (emote[1].upscale) {
@@ -1670,20 +1974,20 @@ Chat = {
       if (Chat.info.bigSoloEmotes) {
         // Clone the message content for checking
         const $messageClone = $('<div>').html($message.html());
-        
+
         // Remove all emote images
         const emotes = $messageClone.find('img.emote, img.emoji');
         const emoteCount = emotes.length;
         emotes.remove();
-        
+
         // Check if there's any text content left after removing emotes
         const remainingText = $messageClone.text().trim();
-        
+
         // If no text and we have emotes, this is an emote-only message
         if (remainingText === '' && emoteCount > 0) {
           // Add a class to the message for styling
           $message.addClass('emote-only');
-          
+
           // Find all emotes and add the large class
           $message.find('img.emote, img.emoji').addClass('large-emote');
         }
@@ -1761,7 +2065,7 @@ Chat = {
                   // console.log("Detected existing stroke effect in paint shadows, disabling additional stroke");
                   mentionShadow = "";
                 }
-                
+
                 // Categorize drop-shadows based on blur radius
                 dropShadows.forEach(shadow => {
                   // Extract the blur radius (third value in px)
@@ -1790,22 +2094,22 @@ Chat = {
                     smallBlurShadows.push(shadow);
                   }
                 });
-                
+
                 // Reconstruct filter with the correct order
                 // Small blur shadows + mentionShadow + large blur shadows
-                
+
                 if (smallBlurShadows.length > 0) {
                   finalFilter += smallBlurShadows.join(' ');
                 }
-                
+
                 if (mentionShadow) {
                   finalFilter += mentionShadow;
                 }
-                
+
                 if (largeBlurShadows.length > 0) {
                   finalFilter += ' ' + largeBlurShadows.join(' ');
                 }
-                
+
                 // Debug log to verify the filter string
                 // console.log("Applied filter:", finalFilter);
               } else {
@@ -1813,11 +2117,11 @@ Chat = {
               }
               $mention.css("filter", finalFilter);
               $mention.addClass("paint");
-              
+
               var mentionHtml = $mention[0].outerHTML;
               return mentionHtml;
             }
-            
+
             if (Chat.info.colors[username]) {
               $mention.css("color", Chat.info.colors[username]);
               return $mention[0].outerHTML;
@@ -1833,19 +2137,19 @@ Chat = {
       $message.html(message);
 
       // Wrap text nodes in .text-content spans
-      const wrapTextNodes = function($element) {
-        $element.contents().each(function() {
+      const wrapTextNodes = function ($element) {
+        $element.contents().each(function () {
           // If it's a text node and it's not just whitespace
           if (this.nodeType === 3 && this.nodeValue.trim().length > 0) {
             $(this).wrap('<span class="text-content"></span>');
-          } 
+          }
           // If it's an element node, process its children recursively
           else if (this.nodeType === 1 && !$(this).is('img, .emote, .emoji, .zero-width, .mention, .paint')) {
             wrapTextNodes($(this));
           }
         });
       };
-      
+
       // Apply the text wrapping
       wrapTextNodes($message);
 
@@ -1856,8 +2160,8 @@ Chat = {
       Chat.info.lines.push($chatLine.wrap("<div>").parent().html());
       if (hasZeroWidth) {
         // console.log("DEBUG Message with mentions and emotes before fixZeroWidth:", $message.html());
-        setTimeout(function() {
-            fixZeroWidthEmotes(info.id);
+        setTimeout(function () {
+          fixZeroWidthEmotes(info.id);
         }, 500);
       }
     }
@@ -1867,15 +2171,15 @@ Chat = {
     return username.replace(/\\s$/, '').trim();
   },
 
-  clearChat: function(nick) {
-    setTimeout(function() {
-        $('.chat_line[data-nick=' + nick + ']').remove();
+  clearChat: function (nick) {
+    setTimeout(function () {
+      $('.chat_line[data-nick=' + nick + ']').remove();
     }, 200);
   },
 
-  clearWholeChat: function() {
-    setTimeout(function() {
-        $('.chat_line').remove();
+  clearWholeChat: function () {
+    setTimeout(function () {
+      $('.chat_line').remove();
     }, 200);
   },
 
@@ -2166,26 +2470,26 @@ Chat = {
                   // Parse command arguments
                   const commandPrefix = message.params[1].toLowerCase().startsWith("!chat ytplay") ? "!chat ytplay" : "!chatis ytplay";
                   const commandArgs = message.params[1].slice(commandPrefix.length).trim();
-                  
+
                   // Extract URL and parameters using regex
                   const urlMatch = commandArgs.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/[^\s]+/i);
                   if (!urlMatch) {
                     console.log("Cyan Chat: No valid YouTube URL found in command");
                     return;
                   }
-                  
+
                   const youtubeUrl = urlMatch[0];
                   const remainingText = commandArgs.replace(youtubeUrl, "").trim();
-                  
+
                   // Parse duration and start time parameters (-d for duration, -s for start time)
                   let duration = 5; // Default duration in seconds
                   let startTime = null; // Will be determined from URL or default to 0
-                  
+
                   const durationMatch = remainingText.match(/-d\s+(\d+)/);
                   if (durationMatch && durationMatch[1]) {
                     duration = parseInt(durationMatch[1]);
                   }
-                  
+
                   const startMatch = remainingText.match(/-s\s+(\d+)/);
                   if (startMatch && startMatch[1]) {
                     startTime = parseInt(startMatch[1]);
@@ -2193,18 +2497,18 @@ Chat = {
 
                   const forceOnTopMatch = remainingText.match(/-f/);
                   const forceOnTop = forceOnTopMatch ? true : false;
-                  
+
                   // Extract video ID and process timestamp
                   const videoId = extractYoutubeVideoId(youtubeUrl);
                   if (!videoId) {
                     console.log("Cyan Chat: Could not extract YouTube video ID");
                     return;
                   }
-                  
+
                   const timestamp = extractYoutubeTimestamp(youtubeUrl, startTime);
-                  
+
                   console.log(`Cyan Chat: Playing YouTube video ${videoId} starting at ${timestamp}s for ${duration}s ${forceOnTop ? 'on top' : 'behind text'}`);
-                  
+
                   embedYoutubeVideo(videoId, timestamp, duration, forceOnTop);
                   return;
                 }
@@ -2256,7 +2560,7 @@ Chat = {
                   const commandPrefix = message.params[1].toLowerCase().startsWith("!chat img") ? "!chat img" : "!chatis img";
                   // Extract the full command after the prefix
                   const fullCommand = message.params[1].slice(commandPrefix.length).trim();
-                  
+
                   // Define the schema for flag parsing
                   const schema = {
                     d: Number,   // Duration in seconds
@@ -2268,36 +2572,36 @@ Chat = {
                     h: Number,   // Height
                     duration: Number,
                   };
-                  
+
                   // Parse flags and text
                   const { flags, rest } = parseFlags(fullCommand, schema);
-                  
+
                   // Get the image source (URL or emote name)
                   let imageSource = rest.trim();
-                  
+
                   // Check if it's a URL
                   const isURL = /^https?:\/\//i.test(imageSource);
-                  
+
                   // Get duration from flags (default 5 seconds)
                   const duration = flags.d || flags.duration || flags.s || flags.t || 5;
-                  
+
                   // Get force on top flag
                   const forceOnTop = flags.f || false;
 
                   const opacity = flags.o || 1;
                   if (opacity < 0) opacity = 0;
                   if (opacity > 1) opacity = 1;
-                  
+
                   if (isURL) {
                     // It's a URL, display directly
                     console.log(`Cyan Chat: Displaying image from URL for ${duration}s`);
                     const img = appendMedia("image", imageSource, forceOnTop, opacity);
-                    
+
                     // Auto-remove after duration
                     setTimeout(() => {
                       removeCurrentMedia('image');
                     }, duration * 1000);
-                    
+
                   } else {
                     // First check if the user has personal 7tv emotes
                     if (Chat.info.seventvPersonalEmotes[message.tags["user-id"]]) {
@@ -2310,12 +2614,12 @@ Chat = {
                       if (personalEmote) {
                         console.log(`Cyan Chat: Displaying personal emote "${personalEmote.name}" for ${duration}s`);
                         const img = appendMedia("image", personalEmote.image, forceOnTop, opacity);
-                        
+
                         // Auto-remove after duration
                         setTimeout(() => {
                           removeCurrentMedia('image');
                         }, duration * 1000);
-                        
+
                         return;
                       }
                     }
@@ -2323,43 +2627,43 @@ Chat = {
                     // Check if it's a native Twitch emote
                     let isTwitchEmote = false;
                     let twitchEmoteId = null;
-                    
+
                     if (typeof message.tags.emotes === "string" && message.tags.emotes !== "") {
                       try {
                         // Split the emotes string by /
                         const emoteParts = message.tags.emotes.split("/");
-                        
+
                         // Loop through each emote data
                         for (const emoteData of emoteParts) {
                           // Split by colon to get ID and positions
                           const twitchEmote = emoteData.split(":");
-                          
+
                           // Skip if invalid format
                           if (twitchEmote.length < 2) continue;
-                          
+
                           // Get the first position
                           const indexesData = twitchEmote[1].split(",")[0];
                           if (!indexesData) continue;
-                          
+
                           // Get start and end indexes
                           const indexes = indexesData.split("-");
                           if (indexes.length !== 2) continue;
-                          
+
                           const startIndex = parseInt(indexes[0]);
                           const endIndex = parseInt(indexes[1]);
-                          
+
                           // Get the emote name from the message
                           var emojis = new RegExp("[\u1000-\uFFFF]+", "g");
                           var aux = message.params[1].replace(emojis, " ");
-                          
+
                           // Check if indices are valid
-                          if (isNaN(startIndex) || isNaN(endIndex) || 
-                            startIndex < 0 || endIndex >= aux.length || 
+                          if (isNaN(startIndex) || isNaN(endIndex) ||
+                            startIndex < 0 || endIndex >= aux.length ||
                             startIndex > endIndex) continue;
-                          
+
                           // Extract the emote code
                           var emoteCode = aux.substr(startIndex, endIndex - startIndex + 1);
-                          
+
                           // Check if it matches the requested emote
                           if (emoteCode.toLowerCase() === imageSource.toLowerCase()) {
                             isTwitchEmote = true;
@@ -2367,18 +2671,18 @@ Chat = {
                             break;
                           }
                         }
-                        
+
                         // If found, display the Twitch emote
                         if (isTwitchEmote && twitchEmoteId) {
                           console.log(`Cyan Chat: Displaying Twitch emote "${imageSource}" for ${duration}s`);
                           const emoteUrl = `https://static-cdn.jtvnw.net/emoticons/v2/${twitchEmoteId}/default/dark/3.0`;
                           const img = appendMedia("image", emoteUrl, forceOnTop, opacity);
-                          
+
                           // Auto-remove after duration
                           setTimeout(() => {
                             removeCurrentMedia('image');
                           }, duration * 1000);
-                          
+
                           return;
                         }
                       } catch (error) {
@@ -2390,16 +2694,16 @@ Chat = {
                     const emoteFound = Object.entries(Chat.info.emotes).find(
                       ([emoteName]) => emoteName.toLowerCase() === imageSource.toLowerCase()
                     );
-                    
+
                     if (emoteFound) {
                       console.log(`Cyan Chat: Displaying emote "${emoteFound[0]}" for ${duration}s`);
                       const img = appendMedia("image", emoteFound[1].image, forceOnTop, opacity);
-                      
+
                       // Auto-remove after duration
                       setTimeout(() => {
                         removeCurrentMedia('image');
                       }, duration * 1000);
-                      
+
                     } else {
                       console.log(`Cyan Chat: Emote "${imageSource}" not found`);
                     }
@@ -2427,21 +2731,21 @@ Chat = {
                 if (flag) {
                   // Parse the command to extract the number of messages to generate
                   const fullCommand = message.params[1].slice("!chat test".length).trim();
-                  
+
                   // Default to 5 messages if not specified
                   let numMessages = 5;
-                  
+
                   // Try to parse the number from the command
                   const numArg = parseInt(fullCommand);
                   if (!isNaN(numArg) && numArg > 0 && numArg <= 50) {
                     numMessages = numArg;
                   }
-                  
+
                   console.log(`Cyan Chat: Generating ${numMessages} test messages...`);
-                  
+
                   // Generate and display the test messages
                   generateTestMessages(numMessages);
-                  
+
                   return;
                 }
               }
@@ -2521,13 +2825,13 @@ function generateTestMessages(count) {
     // Sample usernames for test messages
     // Load usernames from the file
     const usernames = [];
-    
+
     // Make a synchronous AJAX request to get the usernames file
     $.ajax({
       url: './styles/usernames.txt',
       async: false,
       dataType: 'text',
-      success: function(data) {
+      success: function (data) {
         // Split the data by new lines and filter out empty lines
         const lines = data.split('\n').filter(line => line.trim() !== '');
         // Add each line to the usernames array
@@ -2538,7 +2842,7 @@ function generateTestMessages(count) {
           }
         });
       },
-      error: function(xhr, status, error) {
+      error: function (xhr, status, error) {
         console.error("[Test Messages] Error loading usernames:", error);
       }
     });
@@ -2574,8 +2878,8 @@ function generateTestMessages(count) {
     // Create a queue for messages to avoid sending them all at once
     const messageQueue = [];
     const twitchColors = [
-      "#FF0000", "#0000FF", "#008000", "#B22222", "#FF7F50", 
-      "#9ACD32", "#FF4500", "#2E8B57", "#DAA520", "#D2691E", 
+      "#FF0000", "#0000FF", "#008000", "#B22222", "#FF7F50",
+      "#9ACD32", "#FF4500", "#2E8B57", "#DAA520", "#D2691E",
       "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F"
     ];
 
@@ -2587,31 +2891,31 @@ function generateTestMessages(count) {
     // Get available emotes from Chat.info.emotes
     const availableEmotes = Object.keys(Chat.info.emotes);
     // console.log(`[Test Messages] Found ${availableEmotes.length} available emotes`);
-    
+
     // Generate UUID-like message IDs (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     function generateMessageId() {
       const pattern = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
-      return pattern.replace(/[xy]/g, function(c) {
+      return pattern.replace(/[xy]/g, function (c) {
         const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
       });
     }
-    
+
     // Create messages with exact Twitch IRC tag structure
     // console.log("[Test Messages] Creating messages with exact Twitch IRC structure");
-    
+
     // Process paint data early to avoid async issues
     $.getJSON("./styles/unique-paint-types.json")
-      .done(function(paintData) {
+      .done(function (paintData) {
         try {
           // console.log("[Test Messages] Paint data loaded successfully");
-          
+
           if (!paintData || !paintData.data || !paintData.data.cosmetics || !paintData.data.cosmetics.paints) {
             console.error("[Test Messages] Error: Invalid paint data structure", paintData);
             createAndSendMessages([]);
             return;
           }
-          
+
           const availablePaints = paintData.data.cosmetics.paints;
           // console.log(`[Test Messages] Found ${availablePaints.length} available paints`);
           createAndSendMessages(availablePaints);
@@ -2620,11 +2924,11 @@ function generateTestMessages(count) {
           createAndSendMessages([]);
         }
       })
-      .fail(function(error) {
+      .fail(function (error) {
         console.error("[Test Messages] Failed to load paint data:", error);
         createAndSendMessages([]);
       });
-    
+
     // Create and send test messages
     function createAndSendMessages(availablePaints) {
       // Pronoun types for test users
@@ -2644,38 +2948,38 @@ function generateTestMessages(count) {
         { display: "E/Em", name: "eem" },
         { display: "It/Its", name: "itits" }
       ];
-      
+
       // Create messages
       for (let i = 0; i < count; i++) {
         const username = usernames[Math.floor(Math.random() * usernames.length)] + `${Math.floor(Math.random() * 1000000).toString()}`;
         const userId = (Math.floor(Math.random() * 900000) + 100000).toString();
         const roomId = "123456789";
-        
+
         // Assign random pronouns to test users (only if pronouns are enabled)
         if (Chat.info.showPronouns) {
           // 80% chance of having pronouns (some users might not have them set)
           if (Math.random() < 0.8) {
             const randomPronoun = pronounTypes[Math.floor(Math.random() * pronounTypes.length)];
             Chat.info.pronouns[username] = randomPronoun.display;
-            
+
             // Also ensure the pronoun type mapping exists
             if (!Chat.info.pronounTypes[randomPronoun.name]) {
               Chat.info.pronounTypes[randomPronoun.name] = randomPronoun.display;
             }
-            
+
             // console.log(`[Test Messages] Assigned pronouns "${randomPronoun.display}" to user ${username}`);
           }
         }
-        
+
         // Generate message content
         let emoteOnly = Math.random() < EMOTE_ONLY_CHANCE;
         let textMessage;
-        
+
         if (emoteOnly) {
           // Create an emote-only message with 1-2 random emotes
           const emoteCount = Math.floor(Math.random() * 2) + 1;
           const selectedEmotes = [];
-          
+
           for (let j = 0; j < emoteCount; j++) {
             if (availableEmotes.length > 0) {
               const randomIndex = Math.floor(Math.random() * availableEmotes.length);
@@ -2683,13 +2987,13 @@ function generateTestMessages(count) {
               selectedEmotes.push(randomEmote);
             }
           }
-          
+
           textMessage = selectedEmotes.join(" ");
           console.log(`[Test Messages] Created emote-only message: "${textMessage}"`);
         } else {
           // Start with a base message from templates
           textMessage = messageTemplates[Math.floor(Math.random() * messageTemplates.length)];
-          
+
           // Maybe add a mention
           if (Math.random() < 0.3) {
             const mentionedUser = usernames[Math.floor(Math.random() * usernames.length)] + `${Math.floor(Math.random() * 1000000).toString()}`;
@@ -2702,7 +3006,7 @@ function generateTestMessages(count) {
             if (Chat.info.showPronouns && Math.random() < 0.8) {
               const randomPronoun = pronounTypes[Math.floor(Math.random() * pronounTypes.length)];
               Chat.info.pronouns[mentionedUser] = randomPronoun.display;
-              
+
               // Also ensure the pronoun type mapping exists
               if (!Chat.info.pronounTypes[randomPronoun.name]) {
                 Chat.info.pronounTypes[randomPronoun.name] = randomPronoun.display;
@@ -2740,15 +3044,15 @@ function generateTestMessages(count) {
             // Apply paint to some mentioned users
             const mentionUsePaint = Math.random() < PAINT_CHANCE && availablePaints.length > 0;
             let mentionHasPaint = false;
-            
+
             if (mentionUsePaint) {
               try {
                 // console.log(`[Test Messages] Applying paint to user: ${mentionedUser}`);
                 mentionHasPaint = true;
-                
+
                 const mentionRandomPaintIndex = Math.floor(Math.random() * availablePaints.length);
                 const mentionRandomPaint = availablePaints[mentionRandomPaintIndex];
-                
+
                 // Create paint based on type
                 if (mentionRandomPaint.function === "URL") {
                   // Image paint
@@ -2760,7 +3064,7 @@ function generateTestMessages(count) {
                       console.error(`[Test Messages] Error creating shadows: ${error.message}`);
                     }
                   }
-                  
+
                   Chat.info.seventvPaints[mentionedUser] = [{
                     type: "image",
                     name: mentionRandomPaint.name,
@@ -2778,12 +3082,12 @@ function generateTestMessages(count) {
                         mentionRandomPaint.shape || "circle",
                         mentionRandomPaint.repeat || false
                       );
-                      
+
                       let mentionShadows = "";
                       if (mentionRandomPaint.shadows && Array.isArray(mentionRandomPaint.shadows)) {
                         mentionShadows = createDropShadows(mentionRandomPaint.shadows);
                       }
-                      
+
                       Chat.info.seventvPaints[mentionedUser] = [{
                         type: "gradient",
                         name: mentionRandomPaint.name,
@@ -2802,15 +3106,15 @@ function generateTestMessages(count) {
 
             textMessage = textMessage + " @" + mentionedUser;
           }
-          
+
           // console.log(`[Test Messages] Created text message: "${textMessage.substring(0, 30)}${textMessage.length > 30 ? '...' : ''}"`)
         }
-        
+
         // Create a Twitch IRC tag object with ALL required fields
         const isMod = Math.random() < 0.2;
         const isBroadcaster = Math.random() < 0.1;
         const color = Math.random() < 0.3 ? twitchColors[Math.floor(Math.random() * twitchColors.length)] : '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-        
+
         // Create badges string
         let badgesString = "";
         if (isBroadcaster) {
@@ -2818,7 +3122,7 @@ function generateTestMessages(count) {
         } else if (isMod) {
           badgesString = "moderator/1";
         }
-        
+
         // Complete tags object that exactly matches real Twitch IRC messages
         const tags = {
           "badge-info": "",
@@ -2838,24 +3142,24 @@ function generateTestMessages(count) {
           "user-id": userId,
           "user-type": ""
         };
-        
+
         // Initialize empty paint array for every user to prevent undefined errors
         if (!Chat.info.seventvPaints[username]) {
           Chat.info.seventvPaints[username] = [];
         }
-        
+
         // Apply paint to some users
         const usePaint = Math.random() < PAINT_CHANCE && availablePaints.length > 0;
         let hasPaint = false;
-        
+
         if (usePaint) {
           try {
             // console.log(`[Test Messages] Applying paint to user: ${username}`);
             hasPaint = true;
-            
+
             const randomPaintIndex = Math.floor(Math.random() * availablePaints.length);
             const randomPaint = availablePaints[randomPaintIndex];
-            
+
             // Create paint based on type
             if (randomPaint.function === "URL") {
               // Image paint
@@ -2867,7 +3171,7 @@ function generateTestMessages(count) {
                   console.error(`[Test Messages] Error creating shadows: ${error.message}`);
                 }
               }
-              
+
               Chat.info.seventvPaints[username] = [{
                 type: "image",
                 name: randomPaint.name,
@@ -2885,12 +3189,12 @@ function generateTestMessages(count) {
                     randomPaint.shape || "circle",
                     randomPaint.repeat || false
                   );
-                  
+
                   let shadows = "";
                   if (randomPaint.shadows && Array.isArray(randomPaint.shadows)) {
                     shadows = createDropShadows(randomPaint.shadows);
                   }
-                  
+
                   Chat.info.seventvPaints[username] = [{
                     type: "gradient",
                     name: randomPaint.name,
@@ -2906,7 +3210,7 @@ function generateTestMessages(count) {
             console.error(`[Test Messages] Error applying paint: ${error.message}`);
           }
         }
-        
+
         // Add message to queue
         messageQueue.push({
           username,
@@ -2916,7 +3220,7 @@ function generateTestMessages(count) {
           hasPaint: hasPaint
         });
       }
-      
+
       // Send messages with delays
       let cumulativeDelay = 0;
       messageQueue.forEach((item, index) => {
@@ -2931,7 +3235,7 @@ function generateTestMessages(count) {
           }
         }, cumulativeDelay);
       });
-      
+
       // Notify user
       SendInfoText(`Generated ${count} test messages`);
     }
@@ -2947,49 +3251,49 @@ function detectStrokeEffect(dropShadows) {
   if (!dropShadows || dropShadows.length < 3) {
     return false;
   }
-  
+
   // Extract shadow directions and properties
   const shadowDirections = new Set();
   let hasMultipleDirections = false;
   let hasOppositeDirections = false;
   let hasBlackColor = false;
   let hasLargeBlur = false;
-  
+
   // Parse each drop shadow to analyze its properties
   dropShadows.forEach(shadow => {
     // Extract x, y, blur and color
     const match = shadow.match(/drop-shadow\(\s*(-?\d+(\.\d+)?)px\s+(-?\d+(\.\d+)?)px\s+(\d+(\.\d+)?)px\s+(.+)\)/);
-    
+
     if (match) {
       const x = parseFloat(match[1]);
       const y = parseFloat(match[3]);
       const blur = parseFloat(match[5]);
       const color = match[7];
-      
+
       // Check for black or very dark color
-      if (color.includes('rgba(0, 0, 0,') || color.includes('rgb(0, 0, 0') || 
-          color.includes('#000') || color.includes('black')) {
+      if (color.includes('rgba(0, 0, 0,') || color.includes('rgb(0, 0, 0') ||
+        color.includes('#000') || color.includes('black')) {
         hasBlackColor = true;
       }
-      
+
       // Add direction to set
       const direction = getDirection(x, y);
       shadowDirections.add(direction);
-      
+
       // Check if there are large blur values, indicating more of a glow than a stroke
       if (blur >= 2) {
         hasLargeBlur = true;
       }
-      
+
       // Check for opposite directions
       if (shadowDirections.has('right') && shadowDirections.has('left')) hasOppositeDirections = true;
       if (shadowDirections.has('up') && shadowDirections.has('down')) hasOppositeDirections = true;
     }
   });
-  
+
   // Check if we have at least 3 directions (enough to form a partial stroke)
   hasMultipleDirections = shadowDirections.size >= 3;
-  
+
   // console.log("Shadow analysis:", {
   //   directions: Array.from(shadowDirections),
   //   hasMultipleDirections,
@@ -2997,7 +3301,7 @@ function detectStrokeEffect(dropShadows) {
   //   hasBlackColor,
   //   hasLargeBlur
   // });
-  
+
   // Consider it a stroke effect if:
   // 1. It has multiple directions (at least 3)
   // 2. It has some opposite directions (complete surrounding)
