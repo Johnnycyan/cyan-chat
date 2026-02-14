@@ -116,11 +116,16 @@ body {
 }
 
 .paint {
+  background-image: var(--paint-bg);
+  background-color: var(--paint-bg-color);
+  background-position: var(--paint-pos);
   background-size: cover;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow: none;
+  position: relative;
+  z-index: 1;
 }
 
 .nopaint {
@@ -178,7 +183,11 @@ body {
   white-space: nowrap;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Default gradient */
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 100%
+  ); /* Default gradient */
 }
 
 .pronoun:hover {

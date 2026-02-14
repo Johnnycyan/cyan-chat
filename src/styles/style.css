@@ -1,6 +1,7 @@
 @font-face {
   font-family: "Baloo Tammudu 2";
-  src: url("BalooTammudu2-Fixed.woff2") format("woff2"),
+  src:
+    url("BalooTammudu2-Fixed.woff2") format("woff2"),
     url("BalooTammudu2-Fixed.woff") format("woff"),
     url("BalooTammudu2-Fixed.ttf") format("truetype");
   font-weight: bold;
@@ -425,6 +426,8 @@ footer a {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow: none;
+  position: relative;
+  z-index: 1;
 }
 
 .nopaint {
@@ -510,7 +513,11 @@ footer a {
   white-space: nowrap;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Default gradient */
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 100%
+  ); /* Default gradient */
 }
 
 .pronoun:hover {
