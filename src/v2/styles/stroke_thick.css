@@ -7,10 +7,16 @@
   --stroke-3-min: -4.5px;
 }
 
-/* #chat_container {
-  text-shadow: var(--stroke-1) var(--stroke-3) 0px #000,
+/* Apply performance-optimized text-shadow stroke to all text elements */
+.chat_line .message,
+.chat_line .nick,
+.chat_line .colon,
+.chat_line .mention {
+  text-shadow:
+    var(--stroke-1) var(--stroke-3) 0px #000,
     var(--stroke-2) var(--stroke-2) 0px #000,
-    var(--stroke-3) var(--stroke-1) 0px #000, var(--stroke-3) 0px 0px #000,
+    var(--stroke-3) var(--stroke-1) 0px #000,
+    var(--stroke-3) 0px 0px #000,
     var(--stroke-3) var(--stroke-1-min) 0px #000,
     var(--stroke-2) var(--stroke-2-min) 0px #000,
     var(--stroke-1) var(--stroke-3-min) 0px #000,
@@ -23,7 +29,8 @@
     var(--stroke-1-min) var(--stroke-3-min) 0px #000,
     var(--stroke-3) var(--stroke-1) 0px #000,
     var(--stroke-2) var(--stroke-2) 0px #000,
-    var(--stroke-1) var(--stroke-3) 0px #000, 0px var(--stroke-3) 0px #000,
+    var(--stroke-1) var(--stroke-3) 0px #000,
+    0px var(--stroke-3) 0px #000,
     var(--stroke-1-min) var(--stroke-3) 0px #000,
     var(--stroke-2-min) var(--stroke-2) 0px #000,
     var(--stroke-3-min) var(--stroke-1) 0px #000,
@@ -34,8 +41,69 @@
     var(--stroke-1-min) var(--stroke-3-min) 0px #000,
     var(--stroke-2-min) var(--stroke-2-min) 0px #000,
     var(--stroke-3-min) var(--stroke-1-min) 0px #000;
-} */
+}
 
-.colon, .mention:not(.paint), .text-content {
-  filter: drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px);
+/* Optimization: Use pseudo-elements for paint stroke AND background to solve stacking context issues */
+/* Layer 1 (Front): Main Element (Content). Transparent text. */
+.chat_line .paint {
+  position: relative;
+  white-space: nowrap; /* Essential to keep the absolute stroke layer aligned */
+  text-shadow: none !important; /* No shadow on the main element */
+  background: none !important; /* Hide inline background so we can move it to ::after */
+  color: transparent !important; /* Hide inline color */
+}
+
+/* Layer 2 (Middle): Gradient Background. z-index -1 */
+.chat_line .paint::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  z-index: -1;
+  background-image: var(--paint-bg);
+  background-color: var(--paint-bg-color);
+  background-position: var(--paint-pos);
+  background-size: cover;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Layer 3 (Back): Stroke. z-index -2 */
+.chat_line .paint::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  z-index: -2;
+  /* Make text body transparent so only the stroke shadow is visible */
+  -webkit-text-fill-color: transparent;
+  /* Apply the stroke shadow here */
+  text-shadow:
+    var(--stroke-1) var(--stroke-3) 0px #000,
+    var(--stroke-2) var(--stroke-2) 0px #000,
+    var(--stroke-3) var(--stroke-1) 0px #000,
+    var(--stroke-3) 0px 0px #000,
+    var(--stroke-3) var(--stroke-1-min) 0px #000,
+    var(--stroke-2) var(--stroke-2-min) 0px #000,
+    var(--stroke-1) var(--stroke-3-min) 0px #000,
+    var(--stroke-1-min) var(--stroke-3) 0px #000,
+    var(--stroke-2-min) var(--stroke-2) 0px #000,
+    var(--stroke-3-min) var(--stroke-1) 0px #000,
+    var(--stroke-3-min) 0px 0px #000,
+    var(--stroke-3-min) var(--stroke-1-min) 0px #000,
+    var(--stroke-2-min) var(--stroke-2-min) 0px #000,
+    var(--stroke-1-min) var(--stroke-3-min) 0px #000,
+    var(--stroke-3) var(--stroke-1) 0px #000,
+    var(--stroke-2) var(--stroke-2) 0px #000,
+    var(--stroke-1) var(--stroke-3) 0px #000,
+    0px var(--stroke-3) 0px #000,
+    var(--stroke-1-min) var(--stroke-3) 0px #000,
+    var(--stroke-2-min) var(--stroke-2) 0px #000,
+    var(--stroke-3-min) var(--stroke-1) 0px #000,
+    var(--stroke-3) var(--stroke-1-min) 0px #000,
+    var(--stroke-2) var(--stroke-2-min) 0px #000,
+    var(--stroke-1) var(--stroke-3-min) 0px #000,
+    0px var(--stroke-3-min) 0px #000,
+    var(--stroke-1-min) var(--stroke-3-min) 0px #000,
+    var(--stroke-2-min) var(--stroke-2-min) 0px #000,
+    var(--stroke-3-min) var(--stroke-1-min) 0px #000;
 }

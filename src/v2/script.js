@@ -1535,137 +1535,39 @@ Chat = {
         $username.css("padding-right", "0.5em");
       }
       $username.html(info["display-name"] ? info["display-name"] : nick); // if display name is set, use that instead of twitch name
-      var $usernameCopy = null;
       // check the info for seventv paints and add them to the username
       if (service != "youtube") {
         if (Chat.info.seventvPaints[nick] && Chat.info.seventvPaints[nick].length > 0) {
-          // console.log("Found 7tv paints for " + nick);
-          $usernameCopy = $username.clone();
-          $usernameCopy.css("position", "absolute");
-          $usernameCopy.css("color", "transparent");
-          $usernameCopy.css("z-index", "-1");
-          if (Chat.info.center) {
-            $usernameCopy.css("max-width", "29.9%");
-            $usernameCopy.css("padding-right", "0.5em");
-            $usernameCopy.css("text-overflow", "clip");
-          }
           paint = Chat.info.seventvPaints[nick][0];
           if (paint.type === "gradient") {
-            $username.css("background-image", paint.backgroundImage);
+            $username[0].style.setProperty("--paint-bg", paint.backgroundImage);
           } else if (paint.type === "image") {
-            $username.css(
-              "background-image",
-              "url(" + paint.backgroundImage + ")"
-            );
-            $username.css("background-color", color);
-            $username.css("background-position", "center");
+            $username[0].style.setProperty("--paint-bg", "url(" + paint.backgroundImage + ")");
+            $username[0].style.setProperty("--paint-bg-color", color);
+            $username[0].style.setProperty("--paint-pos", "center");
           }
-          let userShadow = "";
-          if (Chat.info.stroke) {
-            // console.log("Stroke is " + Chat.info.stroke)
-            if (Chat.info.stroke === 1) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            } else if (Chat.info.stroke === 2) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            }
-          }
-          // Process paint.filter to handle large blur drop-shadows correctly
+          $username.attr("data-text", info["display-name"] ? info["display-name"] : nick);
+
+          // CSS ::before handles stroke now. Only apply paint's own filters (glows).
           let finalFilter = '';
           if (paint.filter) {
-            // Fix the regex to properly capture entire drop-shadow expressions including closing parenthesis
+            // Fix the regex to properly capture entire drop-shadow expressions
             const dropShadows = paint.filter.match(/drop-shadow\([^)]*\)/g) || [];
-            // console.log("Drop shadows: ", dropShadows);
-            const smallBlurShadows = [];
-            const largeBlurShadows = [];
-
-            // Check if shadows already form a stroke effect
-            const hasStrokeEffect = detectStrokeEffect(dropShadows);
-            if (hasStrokeEffect) {
-              // console.log("Detected existing stroke effect in paint shadows, disabling additional stroke");
-              userShadow = "";
-            }
-
-            // Categorize drop-shadows based on blur radius
-            dropShadows.forEach(shadow => {
-              // Extract the blur radius (third value in px)
-              const blurMatch = shadow.match(/-?\d+(\.\d+)?px\s+-?\d+(\.\d+)?px\s+(\d+(\.\d+)?)px/);
-              if (blurMatch && parseFloat(blurMatch[3]) >= 1) {
-                // console.log("Shadow is large because of blur radius: ", blurMatch[3]);
-                if (!shadow.endsWith("px)")) {
-                  shadow = shadow + ")";
-                }
-                largeBlurShadows.push(shadow);
-              } else {
-                try {
-                  if (!parseFloat(blurMatch[3])) {
-                    // console.log("Couldn't parse blur radius: ", blurMatch[3]);
-                  }
-                } catch (e) {
-                  console.log("Error parsing blur radius for blurMatch: ", blurMatch, "Error: ", e);
-                }
-                try {
-                  // console.log("Shadow is small because of blur radius: ", blurMatch[3]);
-                } catch (e) {
-                  console.log("Error parsing blur radius: ", e);
-                }
-                if (!shadow.endsWith("px)")) {
-                  shadow = shadow + ")";
-                }
-                smallBlurShadows.push(shadow);
-              }
-            });
-
-            // console.log("Small blur shadows: ", smallBlurShadows);
-            // console.log("Large blur shadows: ", largeBlurShadows);
-
-            // Reconstruct filter with the correct order
-            // Small blur shadows + mentionShadow + large blur shadows
-
-            if (smallBlurShadows.length > 0) {
-              finalFilter += smallBlurShadows.join(' ');
-            }
-
-            if (userShadow) {
-              finalFilter += userShadow;
-            }
-
-            if (largeBlurShadows.length > 0) {
-              finalFilter += ' ' + largeBlurShadows.join(' ');
-            }
-
-            // Debug log to verify the filter string
-          } else {
-            finalFilter = userShadow;
+            finalFilter = dropShadows.map(shadow => {
+              return shadow.endsWith("px)") ? shadow : shadow + ")";
+            }).join(' ');
           }
-          // console.log("Applied filter:", finalFilter);
-          $username.css("filter", finalFilter);
+
+          if (finalFilter) {
+            $username.css("filter", finalFilter);
+          }
           $username.addClass("paint");
           if (Chat.info.hidePaints) {
             $username.addClass("nopaint");
           }
-          $userInfo.append($usernameCopy);
-        } else {
-          let userShadow = "";
-          if (Chat.info.stroke) {
-            if (Chat.info.stroke === 1) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            } else if (Chat.info.stroke === 2) {
-              userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-            }
-          }
-          $username.css("filter", userShadow);
+          // $userInfo.append($usernameCopy);
         }
-      } else {
-        let userShadow = "";
-        if (Chat.info.stroke) {
-          // console.log("Stroke is " + Chat.info.stroke)
-          if (Chat.info.stroke === 1) {
-            userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-          } else if (Chat.info.stroke === 2) {
-            userShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-          }
-        }
-        $username.css("filter", userShadow);
+        // Non-paint nicks and YouTube nicks: stroke handled by CSS (.nick:not(.paint) rule)
       }
 
       if (Chat.info.hideColon && !Chat.info.center) {
@@ -2034,88 +1936,27 @@ Chat = {
               // $mentionCopy.css("z-index", "-1");
               paint = Chat.info.seventvPaints[username][0];
               if (paint.type === "gradient") {
-                $mention.css("background-image", paint.backgroundImage);
+                $mention[0].style.setProperty("--paint-bg", paint.backgroundImage);
               } else if (paint.type === "image") {
-                $mention.css(
-                  "background-image",
-                  "url(" + paint.backgroundImage + ")"
-                );
-                $mention.css("background-color", color);
-                $mention.css("background-position", "center");
+                $mention[0].style.setProperty("--paint-bg", "url(" + paint.backgroundImage + ")");
+                $mention[0].style.setProperty("--paint-bg-color", color);
+                $mention[0].style.setProperty("--paint-pos", "center");
               }
-              let mentionShadow = "";
-              if (Chat.info.stroke) {
-                if (Chat.info.stroke === 1) {
-                  mentionShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)";
-                } else if (Chat.info.stroke === 2) {
-                  mentionShadow = " drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px) drop-shadow(rgb(0, 0, 0) 0px 0px 0.5px)"
-                }
-              }
-              // Process paint.filter to handle large blur drop-shadows correctly
+              $mention.attr("data-text", word.replace("</span>", ""));
+
+              // CSS ::before handles stroke now. Only apply paint's own filters (glows).
               let finalFilter = '';
               if (paint.filter) {
-                // Fix the regex to properly capture entire drop-shadow expressions including closing parenthesis
+                // Fix the regex to properly capture entire drop-shadow expressions
                 const dropShadows = paint.filter.match(/drop-shadow\([^)]*\)/g) || [];
-                const smallBlurShadows = [];
-                const largeBlurShadows = [];
-
-                // Check if shadows already form a stroke effect
-                const hasStrokeEffect = detectStrokeEffect(dropShadows);
-                if (hasStrokeEffect) {
-                  // console.log("Detected existing stroke effect in paint shadows, disabling additional stroke");
-                  mentionShadow = "";
-                }
-
-                // Categorize drop-shadows based on blur radius
-                dropShadows.forEach(shadow => {
-                  // Extract the blur radius (third value in px)
-                  const blurMatch = shadow.match(/-?\d+(\.\d+)?px\s+-?\d+(\.\d+)?px\s+(\d+(\.\d+)?)px/);
-                  if (blurMatch && parseFloat(blurMatch[3]) >= 1) {
-                    if (!shadow.endsWith("px)")) {
-                      shadow = shadow + ")";
-                    }
-                    largeBlurShadows.push(shadow);
-                  } else {
-                    try {
-                      if (!parseFloat(blurMatch[3])) {
-                        // console.log("Couldn't parse blur radius: ", blurMatch[3]);
-                      }
-                    } catch (e) {
-                      console.log("Error parsing blur radius for blurMatch: ", blurMatch, "Error: ", e);
-                    }
-                    try {
-                      // console.log("Shadow is small because of blur radius: ", blurMatch[3]);
-                    } catch (e) {
-                      console.log("Error parsing blur radius: ", e);
-                    }
-                    if (!shadow.endsWith("px)")) {
-                      shadow = shadow + ")";
-                    }
-                    smallBlurShadows.push(shadow);
-                  }
-                });
-
-                // Reconstruct filter with the correct order
-                // Small blur shadows + mentionShadow + large blur shadows
-
-                if (smallBlurShadows.length > 0) {
-                  finalFilter += smallBlurShadows.join(' ');
-                }
-
-                if (mentionShadow) {
-                  finalFilter += mentionShadow;
-                }
-
-                if (largeBlurShadows.length > 0) {
-                  finalFilter += ' ' + largeBlurShadows.join(' ');
-                }
-
-                // Debug log to verify the filter string
-                // console.log("Applied filter:", finalFilter);
-              } else {
-                finalFilter = mentionShadow;
+                finalFilter = dropShadows.map(shadow => {
+                  return shadow.endsWith("px)") ? shadow : shadow + ")";
+                }).join(' ');
               }
-              $mention.css("filter", finalFilter);
+
+              if (finalFilter) {
+                $mention.css("filter", finalFilter);
+              }
               $mention.addClass("paint");
 
               var mentionHtml = $mention[0].outerHTML;
@@ -2136,22 +1977,7 @@ Chat = {
       // Finalize the message HTML
       $message.html(message);
 
-      // Wrap text nodes in .text-content spans
-      const wrapTextNodes = function ($element) {
-        $element.contents().each(function () {
-          // If it's a text node and it's not just whitespace
-          if (this.nodeType === 3 && this.nodeValue.trim().length > 0) {
-            $(this).wrap('<span class="text-content"></span>');
-          }
-          // If it's an element node, process its children recursively
-          else if (this.nodeType === 1 && !$(this).is('img, .emote, .emoji, .zero-width, .mention, .paint')) {
-            wrapTextNodes($(this));
-          }
-        });
-      };
-
-      // Apply the text wrapping
-      wrapTextNodes($message);
+      // Text wrapping for per-word stroke removed — stroke filter now applied at .message level via CSS
 
       $chatLine.append($message);
       if (Chat.info.sms) {
