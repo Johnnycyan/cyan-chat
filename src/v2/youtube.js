@@ -8,11 +8,11 @@ if (Chat.info.yt) {
 	// Create the WebSocket connection
 	var yt_socket = new ReconnectingWebSocket(wsUrl, null, { reconnectInterval: 5000 });
 
-	yt_socket.onopen = function() {
+	yt_socket.onopen = function () {
 		console.log('YouTube: Connected');
 	};
 
-	yt_socket.onclose = function() {
+	yt_socket.onclose = function () {
 		console.log('YouTube: Disconnected');
 	};
 
@@ -28,7 +28,7 @@ if (Chat.info.yt) {
 			"badge-info": badge_info,
 			"badges": badges,
 			"color": true,
-			"display-name": message.author.name,
+			"display-name": message.author.name.replace("@", ""),
 			"emotes": true,
 			"first-msg": "0",
 			"flags": true,
@@ -47,14 +47,12 @@ if (Chat.info.yt) {
 		return info
 	}
 
-	yt_socket.onmessage = function(data) {
+	yt_socket.onmessage = function (data) {
 		data = JSON.parse(data.data)
-		if(data.info == "deleted")
-		{
+		if (data.info == "deleted") {
 			Chat.clearMessage(String(data.message))
 		}
-		else
-		{
+		else {
 			let info = formatMessage(data)
 			Chat.write(data.author.name, info, data.message, "youtube")
 		}
