@@ -1411,6 +1411,7 @@ Chat = {
       $chatLine.attr("data-nick", nick);
       $chatLine.attr("data-time", Date.now());
       $chatLine.attr("data-id", info.id);
+      if (info["user-id"]) $chatLine.attr("data-user-id", info["user-id"]);
       var $userInfo = $("<span></span>");
       $userInfo.addClass("user_info");
 

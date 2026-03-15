@@ -24,6 +24,26 @@ if (Chat.info.yt) {
 			badges += "youtubemod/1"
 		}
 
+		if (message.author.badges && message.author.badges.length > 0) {
+			const authorName = message.author.name.replace("@", "").toLowerCase().trim();
+			if (!Chat.info.userBadges[authorName]) {
+				Chat.info.userBadges[authorName] = [];
+			}
+			
+			message.author.badges.forEach(badge => {
+				if (badge && badge.url) {
+					const userBadge = {
+						description: badge.tooltip || "YouTube Member",
+						url: badge.url
+					};
+					// avoid duplicates
+					if (!Chat.info.userBadges[authorName].some(b => b.url === userBadge.url)) {
+						Chat.info.userBadges[authorName].push(userBadge);
+					}
+				}
+			});
+		}
+
 		let info = {
 			"badge-info": badge_info,
 			"badges": badges,
@@ -52,9 +72,19 @@ if (Chat.info.yt) {
 		if (data.info == "deleted") {
 			Chat.clearMessage(String(data.message))
 		}
+		else if (data.info == "banned") {
+			setTimeout(function () {
+				$('.chat_line[data-user-id="' + data.externalChannelId + '"]').remove();
+			}, 200);
+		}
+		else if (data.type === "superchat") {
+			let info = formatMessage(data)
+			let msg = data.hasMessage ? `${data.purchase_amount} ${data.message}` : data.purchase_amount
+			Chat.write(data.author.name.replace("@", "").toLowerCase().trim(), info, msg, "youtube")
+		}
 		else {
 			let info = formatMessage(data)
-			Chat.write(data.author.name, info, data.message, "youtube")
+			Chat.write(data.author.name.replace("@", "").toLowerCase().trim(), info, data.message, "youtube")
 		}
 	}
 }
