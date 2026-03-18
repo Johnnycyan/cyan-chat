@@ -43,10 +43,10 @@ function appendCSS(type, name) {
 
 const toTitleCase = (phrase) => {
   return phrase
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
 function loadCustomFont(name) {
@@ -285,7 +285,7 @@ function appendMedia(mediaType, source, forceOnTop = false, opacity = 1) {
     img.style.zIndex = forceOnTop ? "100" : "-50"; // Different z-index for images
     img.style.opacity = opacity; // Set opacity
     img.id = "chat-image";
-    
+
     // Add a container to help with positioning relative to chat_container
     const container = document.createElement("div");
     container.id = "chat-image-container";
@@ -296,10 +296,10 @@ function appendMedia(mediaType, source, forceOnTop = false, opacity = 1) {
     container.style.height = "100%";
     container.style.zIndex = forceOnTop ? "100" : "-50";
     container.style.pointerEvents = "none"; // Allow clicks to pass through
-    
+
     container.appendChild(img);
     document.body.appendChild(container);
-    
+
     return container; // Return the container for duration handling
   }
 }
@@ -348,7 +348,7 @@ let isTTSPlaying = false;
 function queueTTS(text, voice) {
   console.log(`Queueing TTS: "${text}" with voice ${voice}`);
   ttsQueue.push({ text, voice });
-  
+
   // If nothing is playing, start the queue
   if (!isTTSPlaying) {
     processNextTTS();
@@ -360,15 +360,15 @@ function processNextTTS() {
   if (ttsQueue.length === 0 || isTTSPlaying) {
     return;
   }
-  
+
   // Mark as playing
   isTTSPlaying = true;
-  
+
   // Get the next item from the queue
   const { text, voice } = ttsQueue.shift();
-  
+
   console.log(`Playing TTS from queue: "${text}" with voice ${voice}`);
-  
+
   // Play the TTS
   fetch(`${API}?voice=${voice}&text=${encodeURIComponent(text)}`)
     .then((response) => response.blob())
@@ -385,12 +385,12 @@ function processNextTTS() {
         // Clean up
         audio.remove();
         isTTSPlaying = false;
-        
+
         // Process the next item in the queue
         processNextTTS();
       };
 
-      audio.onerror = function() {
+      audio.onerror = function () {
         console.error("Error playing TTS audio");
         isTTSPlaying = false;
         processNextTTS(); // Try the next one
@@ -429,8 +429,8 @@ async function fixZeroWidthEmotes(messageId) {
             return img.complete
               ? Promise.resolve()
               : new Promise((resolve) => {
-                  img.onload = img.onerror = resolve;
-                });
+                img.onload = img.onerror = resolve;
+              });
           })
         );
 
@@ -525,7 +525,7 @@ async function fixZeroWidthEmotes(messageId) {
 
         // Let the browser render updates
         await new Promise(requestAnimationFrame);
-        
+
         break;  // Break out of retry loop after successful handling
       }
     } else {
@@ -647,7 +647,7 @@ function makeActiveUserCall() {
 
 // Run immediately when connected
 setTimeout(() => {
-makeActiveUserCall();
+  makeActiveUserCall();
 }, 5000);
 
 // Then run every 10 minutes
@@ -657,9 +657,9 @@ setInterval(makeActiveUserCall, 2 * 60 * 1000);
 
 // Extract YouTube video ID from various URL formats
 function extractYoutubeVideoId(url) {
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?)|(shorts\/))\??v?=?([^#&?]*).*/;
   const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
+  return (match && match[8].length === 11) ? match[8] : null;
 }
 
 // Extract timestamp from YouTube URL or command parameter
@@ -668,19 +668,19 @@ function extractYoutubeTimestamp(url, timeParam) {
   if (timeParam !== null && !isNaN(timeParam)) {
     return parseInt(timeParam);
   }
-  
+
   // Check for t or start parameter in URL
   const regExpT = /[?&]t=(\d+)/;
   const regExpStart = /[?&]start=(\d+)/;
   const matchT = url.match(regExpT);
   const matchStart = url.match(regExpStart);
-  
+
   if (matchT && matchT[1]) {
     return parseInt(matchT[1]);
   } else if (matchStart && matchStart[1]) {
     return parseInt(matchStart[1]);
   }
-  
+
   return 0; // Default start time
 }
 
@@ -688,16 +688,36 @@ function extractYoutubeTimestamp(url, timeParam) {
 function embedYoutubeVideo(videoId, startTime, duration, forceOnTop = false) {
   // Remove any existing video media first (but leave audio alone)
   removeCurrentMedia('video');
-  
+
   // Create a unique ID for this embed instance
   const embedId = "youtube-embed-" + Date.now();
-  
+
   // Add event listener to detect when video ends via postMessage
   window.addEventListener("message", function onYouTubeMessage(event) {
     // Verify message is from YouTube
     if (event.origin.startsWith("https://www.youtube-nocookie.com") || event.origin.startsWith("https://www.youtube.com")) {
       try {
         const data = JSON.parse(event.data);
+        if (data.event === "infoDelivery" && data.info?.videoContentRect) {
+          if (data.info.videoContentRect.width && data.info.videoContentRect.height) {
+            const holder = document.getElementById("youtube-embed-holder");
+            if (holder) {
+              holder.style.aspectRatio = `${data.info.videoContentRect.width} / ${data.info.videoContentRect.height}`;
+              holder.style.opacity = "1";
+              const windowWidth = window.innerWidth;
+              const windowHeight = window.innerHeight;
+              const windowRatio = windowWidth / windowHeight;
+              const videoRatio = data.info.videoContentRect.width / data.info.videoContentRect.height;
+              if (videoRatio > windowRatio) {
+                holder.style.width = "100%";
+                holder.style.height = "auto";
+              } else {
+                holder.style.width = "auto";
+                holder.style.height = "100%";
+              }
+            }
+          }
+        }
         // Check for video ended event (info.playerState === 0 means ended)
         if (data.event === "infoDelivery" && data.info.currentTime > data.info.progressState.seekableEnd - 0.1 && data.info.videoLoadedFraction === 1) {
           // Check if this is for our current embed
@@ -726,15 +746,15 @@ function embedYoutubeVideo(videoId, startTime, duration, forceOnTop = false) {
 
   // Add API parameters to enable event sending
   const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&iv_load_policy=3&loop=0&controls=0&modestbranding=0&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&start=${startTime}`;
-  
+
   const iframeHolder = document.createElement("div");
   iframeHolder.style.position = "absolute";
   iframeHolder.style.top = "50%";
   iframeHolder.style.left = "50%";
   iframeHolder.style.transform = "translate(-50%, -50%)";
-  iframeHolder.style.width = "100%";
   iframeHolder.style.aspectRatio = "16/9"; // Maintain 16:9 aspect ratio
   iframeHolder.style.maxHeight = "100%";
+  iframeHolder.style.opacity = "0";
   iframeHolder.style.border = "none";
   iframeHolder.style.zIndex = forceOnTop ? "100" : "-100"; // Set z-index based on forceOnTop flag
   iframeHolder.style.pointerEvents = "none"; // Prevent interaction with the iframe
@@ -749,9 +769,9 @@ function embedYoutubeVideo(videoId, startTime, duration, forceOnTop = false) {
   iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
   iframe.id = embedId;
   iframeHolder.appendChild(iframe);
-  
+
   document.body.appendChild(iframeHolder);
-  
+
   // Initialize the YouTube iframe
   setTimeout(() => {
     // Send a message to the iframe to initialize the API
@@ -760,6 +780,22 @@ function embedYoutubeVideo(videoId, startTime, duration, forceOnTop = false) {
       id: embedId
     });
     iframe.contentWindow.postMessage(initMessage, '*');
+
+    // Also request video data
+    iframe.contentWindow.postMessage(JSON.stringify({
+      event: 'command',
+      func: 'getVideoData',
+      args: [],
+      id: embedId
+    }), '*');
+
+    // Also request video data
+    iframe.contentWindow.postMessage(JSON.stringify({
+      event: 'command',
+      func: 'getSize',
+      args: [],
+      id: embedId
+    }), '*');
   }, 1000);
 }
 
@@ -771,14 +807,14 @@ function removeCurrentMedia(type = 'all') {
       existingVideo.remove();
     }
   }
-  
+
   if (type === 'audio' || type === 'all') {
     const existingAudio = document.querySelector("audio");
     if (existingAudio) {
       existingAudio.remove();
     }
   }
-  
+
   if (type === 'image' || type === 'all') {
     const existingImage = document.querySelector("#chat-image");
     if (existingImage) {

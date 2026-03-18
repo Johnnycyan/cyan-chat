@@ -68,8 +68,7 @@ Chat = {
       "hide_colon" in $.QueryString
         ? $.QueryString.hide_colon.toLowerCase() === "true"
         : false,
-    // fade: ('fade' in $.QueryString ? parseInt($.QueryString.fade) : false),
-    fade: "fade" in $.QueryString ? parseInt($.QueryString.fade) : 360,
+    fade: "fade" in $.QueryString ? parseInt($.QueryString.fade) : false,
     size: "size" in $.QueryString ? parseInt($.QueryString.size) : 2,
     height: "height" in $.QueryString ? parseInt($.QueryString.height) : 3,
     weight: "weight" in $.QueryString ? parseInt($.QueryString.weight) : 4,
