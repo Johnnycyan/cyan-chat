@@ -245,10 +245,11 @@ async function getUserBadgeAndPaintInfo(twitchUserId) {
       const sevenTvUserRoles = sevenTvUserInfo.roles;
       // check if the only role is 62b48deb791a15a25c2a0354
       if (!sevenTvUserRoles.includes(sevenTvSubRoleID)) {
-        // console.log(twitchUserId,"is not subscribed to 7tv.")
-        await delay(1000);
-        tries--;
-        continue;
+        return {
+          success: true,
+          badge: null,
+          paint: null,
+        };
       }
 
       const selectedCosmetics = sevenTvUserInfo.style;
@@ -261,12 +262,11 @@ async function getUserBadgeAndPaintInfo(twitchUserId) {
         selectedCosmetics.badge_id === null &&
         selectedCosmetics.paint_id === null
       ) {
-        // console.log(
-        //   `No cosmetics found for user ${sevenTvUserId}. Retrying in 1 second...`
-        // );
-        await delay(1000);
-        tries--;
-        continue;
+        return {
+          success: true,
+          badge: null,
+          paint: null,
+        };
       }
 
       const badgeCosmetics = selectedCosmetics.badge_id;
@@ -312,6 +312,7 @@ async function getUserBadgeAndPaintInfo(twitchUserId) {
       if (badgeDetail || paintDetail) {
         // console.log(`Returning badge and paint details.`);
         return {
+          success: true,
           badge: badgeDetail,
           paint: paintDetail,
         };
@@ -331,6 +332,7 @@ async function getUserBadgeAndPaintInfo(twitchUserId) {
   //   `Failed to fetch badge and paint info for user ${twitchUserId} after 5 attempts`
   // );
   return {
+    success: false,
     badge: null,
     paint: null,
   };

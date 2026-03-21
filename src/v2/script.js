@@ -583,7 +583,7 @@ Chat = {
         }
       });
 
-      Chat.info.seventvPersonalEmotes[channelID] = {};
+      const newEmotes = {};
 
       for (let i = 0; i < emoteSetIDs.length; i++) {
         const emoteSetResponse = await $.getJSON(
@@ -603,13 +603,14 @@ Chat = {
             image: link,
             zeroWidth: emote.data.flags == 256,
           };
-          // Add personalEmote if not already in Chat.info.seventvPersonalEmotes[channelID]
-          if (!Chat.info.seventvPersonalEmotes[channelID][personalEmote.name]) {
-            Chat.info.seventvPersonalEmotes[channelID][personalEmote.name] =
-              personalEmote;
+          // Add personalEmote if not already in newEmotes
+          if (!newEmotes[personalEmote.name]) {
+            newEmotes[personalEmote.name] = personalEmote;
           }
         });
       }
+      
+      Chat.info.seventvPersonalEmotes[channelID] = newEmotes;
     } catch (error) {
       // console.error("Error loading personal emotes: ", error);
     }
@@ -1156,105 +1157,102 @@ Chat = {
     return color;
   },
 
-  loadUserBadges: function (nick, userId) {
-    Chat.info.userBadges[nick] = [];
-    Chat.info.specialBadges[nick] = [];
+  loadUserBadges: async function (nick, userId) {
+    if (!Chat.info.userBadges[nick]) Chat.info.userBadges[nick] = [];
+    if (!Chat.info.specialBadges[nick]) Chat.info.specialBadges[nick] = [];
+
+    var newSpecialBadges = [];
     if (nick === 'johnnycyan') {
       var specialBadge = {
         description: 'Cyan Chat Dev',
         url: 'https://cdn.jsdelivr.net/gh/Johnnycyan/cyan-chat@main/src/img/CyanChat128.webp'
       };
-      if (!Chat.info.specialBadges[nick].includes(specialBadge)) Chat.info.specialBadges[nick].push(specialBadge);
+      newSpecialBadges.push(specialBadge);
     }
-    $.getJSON("https://api.frankerfacez.com/v1/user/" + nick).always(function (
-      res
-    ) {
-      if (res.badges) {
-        Object.entries(res.badges).forEach((badge) => {
-          var userBadge = {
+    Chat.info.specialBadges[nick] = newSpecialBadges;
+
+    var newUserBadges = [];
+
+    try {
+      let ffzRes = await $.getJSON("https://api.frankerfacez.com/v1/user/" + nick);
+      if (ffzRes && ffzRes.badges) {
+        Object.entries(ffzRes.badges).forEach((badge) => {
+          newUserBadges.push({
             description: badge[1].title,
             url: badge[1].urls["4"],
             color: badge[1].color,
-          };
-          if (!Chat.info.userBadges[nick].includes(userBadge))
-            Chat.info.userBadges[nick].push(userBadge);
+          });
         });
       }
-      Chat.info.ffzapBadges.forEach((user) => {
-        if (user.id.toString() === userId) {
-          var color = "#755000";
-          if (user.tier == 2) color = user.badge_color || "#755000";
-          else if (user.tier == 3) {
-            if (user.badge_is_colored == 0)
-              color = user.badge_color || "#755000";
-            else color = false;
-          }
-          var userBadge = {
-            description: "FFZ:AP Badge",
-            url: "https://api.ffzap.com/v1/user/badge/" + userId + "/3",
-            color: color,
-          };
-          if (!Chat.info.userBadges[nick].includes(userBadge))
-            Chat.info.userBadges[nick].push(userBadge);
-        }
-      });
-      Chat.info.bttvBadges.forEach((user) => {
-        if (user.name === nick) {
-          var userBadge = {
-            description: user.badge.description,
-            url: user.badge.svg,
-          };
-          if (!Chat.info.userBadges[nick].includes(userBadge))
-            Chat.info.userBadges[nick].push(userBadge);
-        }
-      });
-      // 7tv functions Added at the end of the file
-      (async () => {
-        try {
-          var sevenInfo = await getUserBadgeAndPaintInfo(userId);
-          var seventvBadgeInfo = sevenInfo.badge;
+    } catch (e) {
+      // Ignore errors (usually returning 404 for users with no badges)
+    }
 
-          if (seventvBadgeInfo) {
-            var userBadge = {
-              description: seventvBadgeInfo.tooltip,
-              url: "https://cdn.7tv.app/badge/" + seventvBadgeInfo.id + "/3x",
-            };
-
-            if (!Chat.info.userBadges[nick].includes(userBadge)) {
-              Chat.info.userBadges[nick] = [];
-              Chat.info.userBadges[nick].push(userBadge);
-            }
-          } else {
-            // console.log("No 7tv badge info found for", userId);
-          }
-        } catch (error) {
-          // console.error("Error fetching badge info:", error);
+    Chat.info.ffzapBadges.forEach((user) => {
+      if (user.id.toString() === userId) {
+        var color = "#755000";
+        if (user.tier == 2) color = user.badge_color || "#755000";
+        else if (user.tier == 3) {
+          if (user.badge_is_colored == 0)
+            color = user.badge_color || "#755000";
+          else color = false;
         }
-      })();
-      // Chat.info.seventvBadges.forEach(badge => {
-      //     badge.users.forEach(user => {
-      //         if (user === nick) {
-      //             var userBadge = {
-      //                 description: badge.tooltip,
-      //                 url: badge.urls[2][1]
-      //             };
-      //             if (!Chat.info.userBadges[nick].includes(userBadge)) Chat.info.userBadges[nick].push(userBadge);
-      //         }
-      //     });
-      // });
-      Chat.info.chatterinoBadges.forEach((badge) => {
-        badge.users.forEach((user) => {
-          if (user === userId) {
-            var userBadge = {
-              description: badge.tooltip,
-              url: badge.image3 || badge.image2 || badge.image1,
-            };
-            if (!Chat.info.userBadges[nick].includes(userBadge))
-              Chat.info.userBadges[nick].push(userBadge);
+        newUserBadges.push({
+          description: "FFZ:AP Badge",
+          url: "https://api.ffzap.com/v1/user/badge/" + userId + "/3",
+          color: color,
+        });
+      }
+    });
+
+    Chat.info.bttvBadges.forEach((user) => {
+      if (user.name === nick) {
+        newUserBadges.push({
+          description: user.badge.description,
+          url: user.badge.svg,
+        });
+      }
+    });
+
+    try {
+      var sevenInfo = await getUserBadgeAndPaintInfo(userId);
+      if (sevenInfo && sevenInfo.success) {
+        if (sevenInfo.badge) {
+          newUserBadges.push({
+            description: sevenInfo.badge.tooltip,
+            url: "https://cdn.7tv.app/badge/" + sevenInfo.badge.id + "/3x",
+          });
+        }
+      } else {
+        // Failed or network error: retain the old 7tv badge if there was one
+        var oldBadges = Chat.info.userBadges[nick] || [];
+        oldBadges.forEach(b => {
+          if (b.url && b.url.includes("cdn.7tv.app/badge")) {
+            newUserBadges.push(b);
           }
         });
+      }
+    } catch (error) {
+      var oldBadges = Chat.info.userBadges[nick] || [];
+      oldBadges.forEach(b => {
+        if (b.url && b.url.includes("cdn.7tv.app/badge")) {
+          newUserBadges.push(b);
+        }
+      });
+    }
+
+    Chat.info.chatterinoBadges.forEach((badge) => {
+      badge.users.forEach((user) => {
+        if (user === userId) {
+          newUserBadges.push({
+            description: badge.tooltip,
+            url: badge.image3 || badge.image2 || badge.image1,
+          });
+        }
       });
     });
+
+    Chat.info.userBadges[nick] = newUserBadges;
   },
 
   loadUserPaints: function (nick, userId) {
@@ -1262,6 +1260,7 @@ Chat = {
     (async () => {
       try {
         var sevenInfo = await getUserBadgeAndPaintInfo(userId);
+        if (!sevenInfo.success) return; // Keep old data if fetch fails
         var seventvPaintInfo = sevenInfo.paint;
 
         if (seventvPaintInfo) {
@@ -1283,12 +1282,7 @@ Chat = {
               backgroundImage: gradient,
               filter: dropShadows,
             };
-            if (Chat.info.seventvPaints[nick]) {
-              if (!Chat.info.seventvPaints[nick].includes(userPaint)) {
-                Chat.info.seventvPaints[nick] = [];
-                Chat.info.seventvPaints[nick].push(userPaint);
-              }
-            }
+            Chat.info.seventvPaints[nick] = [userPaint];
           } else {
             if (seventvPaintInfo.shadows) {
               var dropShadows = createDropShadows(seventvPaintInfo.shadows);
@@ -1306,12 +1300,7 @@ Chat = {
               };
             }
 
-            if (Chat.info.seventvPaints[nick]) {
-              if (!Chat.info.seventvPaints[nick].includes(userPaint)) {
-                Chat.info.seventvPaints[nick] = [];
-                Chat.info.seventvPaints[nick].push(userPaint);
-              }
-            }
+            Chat.info.seventvPaints[nick] = [userPaint];
           }
         } else {
           // console.log("No 7tv paint info found for", userId);
