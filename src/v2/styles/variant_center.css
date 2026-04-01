@@ -45,6 +45,11 @@
   vertical-align: bottom;
 }
 
+.chat_line .paint::before,
+.chat_line .paint::after {
+  padding-left: 5px;
+}
+
 .colon {
   display: none;
 }
@@ -84,4 +89,29 @@
 
 .message .emote {
   vertical-align: top;
+}
+
+/* Channel Point Redeem overrides for center theme */
+.chat_line.channel-point-redeem {
+  flex-wrap: wrap;
+}
+
+.chat_line.channel-point-redeem .redeem-label {
+  width: 100%;
+  justify-content: center;
+  order: -1;
+}
+
+/* Text-less redeem */
+.redeem-only-line {
+  display: flex;
+  justify-content: center;
+}
+
+.redeem-only-line .redeem-inline {
+  justify-content: center;
+}
+
+.mention-highlight {
+  padding-left: 0;
 }

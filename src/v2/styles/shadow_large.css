@@ -1,3 +1,11 @@
 #chat_container {
-    filter: drop-shadow(2px 2px 6px black);
+  filter: drop-shadow(2px 2px 6px black);
+}
+
+body.normalchat #chat_container {
+  filter: none;
+}
+
+body.normalchat .chat_line {
+  filter: drop-shadow(2px 2px 6px black);
 }

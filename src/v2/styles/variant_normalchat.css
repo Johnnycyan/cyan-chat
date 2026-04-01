@@ -1,0 +1,37 @@
+/* Normal Chat Mode - Dark themed like native Twitch chat */
+body {
+  background-color: #18181b;
+}
+
+#chat_container {
+  background-color: #18181b;
+  padding: 8px 12px;
+  width: calc(calc(100% / var(--scale, 1)) - 24px);
+}
+
+.chat_line {
+  padding: 4px 8px;
+  border-bottom: 1px solid #2f2f35;
+  line-height: 1.5em;
+}
+
+.chat_line:last-child {
+  border-bottom: none;
+}
+
+/* Adjust highlight styles to work with background */
+.chat_line.highlighted-message {
+  background-color: rgba(117, 94, 188, 0.4);
+}
+
+.chat_line.mention-highlight {
+  background-color: color-mix(
+    in srgb,
+    var(--mention-color, #ffff00) 15%,
+    transparent
+  );
+}
+
+.chat_line.channel-point-redeem {
+  background-color: rgba(0, 170, 255, 0.08);
+}

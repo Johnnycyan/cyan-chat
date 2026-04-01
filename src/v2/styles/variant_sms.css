@@ -96,7 +96,11 @@
   white-space: nowrap;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Default gradient */
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 100%
+  ); /* Default gradient */
 }
 
 .pronoun:hover {
@@ -156,6 +160,48 @@
   border-bottom: 0.6em solid transparent; /* Adjusted to match border width */
   border-right: 0.85em solid var(--arrow-color); /* Adjusted to match border width */
   z-index: 2;
+}
+
+/* Channel Point Redeem overrides for SMS theme */
+.chat_line.channel-point-redeem {
+  padding-top: 3.2em; /* Extra space: redeem label + username pill */
+}
+
+.chat_line.channel-point-redeem .redeem-label {
+  position: absolute;
+  top: 0.1em;
+  left: 0;
+  right: 0;
+  padding: 0.1em 0.4em;
+  font-size: 0.65em;
+  z-index: 3;
+}
+
+.chat_line.channel-point-redeem .user_info {
+  top: 1.5em; /* Push username pill below redeem label */
+}
+
+/* Text-less redeem */
+.redeem-only-line {
+  background-color: transparent; /* No bubble background */
+  color: black;
+}
+
+.chat_line.channel-point-redeem.redeem-only-line {
+  padding-top: 0;
+}
+
+.redeem-only-line .redeem-inline {
+  padding: 0.5em 0.8em;
+  border-radius: 0.8em;
+  border: 0.1em solid #000;
+  background-color: #f0f0f0;
+}
+
+.redeem-only-line .redeem-inline-text,
+.redeem-only-line .redeem-inline-title,
+.redeem-only-line .redeem-cost {
+  color: #555;
 }
 
 /* Custom image in corner */

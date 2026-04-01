@@ -264,3 +264,79 @@ body {
 .pronoun.ask {
   background: linear-gradient(135deg, #7883b2 0%, #9475b2 100%);
 }
+
+/* Highlighted Message (channel point reward) */
+.highlighted-message {
+  background-color: rgba(117, 94, 188, 0.3);
+  border-left: 4px solid #755ebc;
+  padding-left: 8px;
+  border-radius: 4px;
+}
+
+/* Channel Point Redeem */
+.channel-point-redeem {
+  position: relative;
+  background-color: rgba(0, 170, 255, 0.15);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.channel-point-redeem .redeem-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.75em;
+  color: #bbb;
+  padding: 2px 0;
+  font-style: italic;
+}
+
+.channel-point-redeem .redeem-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+  color: #bbb;
+}
+
+.redeem-label .redeem-cost {
+  margin-left: 0.4em;
+}
+
+.channel-point-redeem .redeem-cp-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+
+/* Text-less redeem: single inline line */
+.redeem-only-line {
+  padding: 4px 6px;
+}
+
+.redeem-only-line .redeem-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25em;
+}
+
+.redeem-only-line .redeem-inline-text {
+  color: #bbb;
+}
+
+.redeem-only-line .redeem-inline-title {
+  color: #bbb;
+  font-weight: bold;
+}
+
+/* Mention Highlight */
+.mention-highlight {
+  background-color: color-mix(
+    in srgb,
+    var(--mention-color, #ffff00) 25%,
+    transparent
+  );
+  border-left: 4px solid var(--mention-color, #ffff00);
+  padding-left: 8px;
+  border-radius: 4px;
+}

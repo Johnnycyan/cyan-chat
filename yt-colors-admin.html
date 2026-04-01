@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: dark;">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Colors - Cyan Chat Admin</title>
+    <link rel="icon" type="image/webp" href="https://meow.catt.ing/r/8G9soV.webp?compress=false">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
+            padding: 32px 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 170, 255, 0.04) 0%, transparent 50%);
+        }
+
+        .container {
+            background: #18181b;
+            border: 1px solid #2f2f35;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #efeff1;
+        }
+
+        .back-link {
+            color: #00d9ff;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #33e1ff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #adadb8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #2f2f35;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #2f2f35;
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        input[type="text"] {
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            color: #efeff1;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #00d9ff;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 40px;
+            height: 36px;
+            padding: 2px;
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 2px;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border-radius: 3px;
+            border: none;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary {
+            background: #00d9ff;
+            color: #0e0e10;
+        }
+
+        .btn-primary:hover {
+            background: #33e1ff;
+        }
+
+        .btn-secondary {
+            background: #2f2f35;
+            color: #efeff1;
+        }
+
+        .btn-secondary:hover {
+            background: #3f3f46;
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: #ef4444;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            display: none;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+            display: block;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 24px;
+            color: #adadb8;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>YouTube User Colors</h1>
+            <a href="/admin" class="back-link">← Back to Admin</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Color</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="colorRows">
+                {{range $user, $color := .Colors}}
+                <tr>
+                    <td><input type="text" class="yt-user" value="{{$user}}"></td>
+                    <td><input type="color" class="yt-color" value="#{{$color}}"></td>
+                    <td><button class="btn btn-danger" onclick="this.closest('tr').remove()">Remove</button></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="addRow()">+ Add User</button>
+            <button class="btn btn-primary" onclick="saveColors()">Save Changes</button>
+        </div>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        var password = "{{.Password}}";
+
+        function addRow() {
+            var tr = document.createElement("tr");
+            tr.innerHTML = '<td><input type="text" class="yt-user" placeholder="username"></td>' +
+                '<td><input type="color" class="yt-color" value="#ff0000"></td>' +
+                '<td><button class="btn btn-danger" onclick="this.closest(\'tr\').remove()">Remove</button></td>';
+            document.getElementById("colorRows").appendChild(tr);
+            tr.querySelector(".yt-user").focus();
+        }
+
+        function saveColors() {
+            var rows = document.querySelectorAll("#colorRows tr");
+            var colors = {};
+            for (var i = 0; i < rows.length; i++) {
+                var user = rows[i].querySelector(".yt-user").value.trim().toLowerCase();
+                var color = rows[i].querySelector(".yt-color").value.replace("#", "");
+                if (user) {
+                    colors[user] = color;
+                }
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/admin/yt-colors", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.setRequestHeader("X-Admin-Password", password);
+            xhr.onload = function () {
+                var el = document.getElementById("status");
+                if (xhr.status === 200) {
+                    el.className = "status success";
+                    el.textContent = "Saved successfully.";
+                } else {
+                    el.className = "status error";
+                    el.textContent = "Error: " + xhr.responseText;
+                }
+                setTimeout(function () { el.className = "status"; }, 3000);
+            };
+            xhr.send(JSON.stringify(colors));
+        }
+    </script>
+</body>
+
+</html>

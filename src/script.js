@@ -10,7 +10,7 @@ function fadeOption(event) {
             'opacity': 1,
             'transform': 'translateY(0)'
         }, 300);
-        
+
         $fade_seconds.removeClass("hidden").css({
             'opacity': 0
         }).animate({
@@ -21,13 +21,13 @@ function fadeOption(event) {
         $fade.animate({
             'opacity': 0,
             'transform': 'translateY(-5px)'
-        }, 300, function() {
+        }, 300, function () {
             $(this).addClass("hidden");
         });
-        
+
         $fade_seconds.animate({
             'opacity': 0
-        }, 300, function() {
+        }, 300, function () {
             $(this).addClass("hidden");
         });
     }
@@ -42,7 +42,7 @@ const popup = {
         content: document.getElementById('popupContent'),
         closeBtn: document.getElementById('popupClose')
     },
-    
+
     // Configuration for different popups
     types: {
         'emote-sync': {
@@ -58,50 +58,50 @@ const popup = {
             contentId: 'sms-theme-content'
         }
     },
-    
+
     // Open popup with specific type
-    open: function(type) {
+    open: function (type) {
         if (!this.types[type]) return;
-        
+
         // Set popup content
         this.elements.title.textContent = this.types[type].title;
         const contentTemplate = document.getElementById(this.types[type].contentId);
-        
+
         if (contentTemplate) {
             this.elements.content.innerHTML = contentTemplate.innerHTML;
         }
-        
+
         // Show and animate popup
         this.elements.overlay.classList.add('active');
-        
+
         // Delay the container animation slightly for a nicer effect
         setTimeout(() => {
             this.elements.container.classList.add('active');
         }, 50);
     },
-    
+
     // Close popup
-    close: function() {
+    close: function () {
         this.elements.container.classList.remove('active');
-        
+
         // Wait for animation to finish before hiding the overlay
         setTimeout(() => {
             this.elements.overlay.classList.remove('active');
         }, 300);
     },
-    
+
     // Initialize the popup system
-    init: function() {
+    init: function () {
         // Close button click
         this.elements.closeBtn.addEventListener('click', () => this.close());
-        
+
         // Click outside to close
         this.elements.overlay.addEventListener('click', (e) => {
             if (e.target === this.elements.overlay) {
                 this.close();
             }
         });
-        
+
         // Escape key to close
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.elements.overlay.classList.contains('active')) {
@@ -112,7 +112,7 @@ const popup = {
 };
 
 // Initialize popup when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     popup.init();
     initializeAnimations();
     setupFormTransition();
@@ -120,39 +120,39 @@ document.addEventListener('DOMContentLoaded', function() {
     generateCustomPronounColorInputs();
 
     Coloris({
-      el: '.coloris',
-      swatches: [
-        '#264653',
-        '#2a9d8f',
-        '#e9c46a',
-        '#f4a261',
-        '#e76f51',
-        '#d62828',
-        '#023e8a',
-        '#0077b6',
-        '#0096c7',
-        '#00b4d8',
-        '#48cae4'
-      ]
+        el: '.coloris',
+        swatches: [
+            '#264653',
+            '#2a9d8f',
+            '#e9c46a',
+            '#f4a261',
+            '#e76f51',
+            '#d62828',
+            '#023e8a',
+            '#0077b6',
+            '#0096c7',
+            '#00b4d8',
+            '#48cae4'
+        ]
     });
 
     /** Instances **/
 
     // Extract unique colors from pronoun defaults
     const pronounColors = [
-      "#4facfe", "#00f2fe", "#ff9a9e", "#fecfef", "#a8edea", "#fed6e3",
-      "#fee140", "#a8caba", "#8a74ae", "#667eea", "#9f5edf", "#ffeef1",
-      "#f093fb", "#7cc2ff", "#43e97b", "#38f9d7", "#fa709a", "#9d64d6",
-      "#f5576c"
+        "#4facfe", "#00f2fe", "#ff9a9e", "#fecfef", "#a8edea", "#fed6e3",
+        "#fee140", "#a8caba", "#8a74ae", "#667eea", "#9f5edf", "#ffeef1",
+        "#f093fb", "#7cc2ff", "#43e97b", "#38f9d7", "#fa709a", "#9d64d6",
+        "#f5576c"
     ];
 
     Coloris.setInstance('.instance1', {
-      theme: 'pill',
-      themeMode: 'dark',
-      alpha: false,
-      swatches: pronounColors
+        theme: 'pill',
+        themeMode: 'dark',
+        alpha: false,
+        swatches: pronounColors
     });
-    
+
     // Initial application of styles
     applyStyles("size", sizes[2]);
 });
@@ -314,7 +314,7 @@ function commandsUpdate(event) {
         'ytstop': $disableYTStop,
         'img': $disableIMG
     };
-    
+
     // Iterate through all command checkboxes
     Object.entries(commandCheckboxes).forEach(([command, $checkbox]) => {
         if ($checkbox.is(":checked")) {
@@ -325,20 +325,20 @@ function commandsUpdate(event) {
 
 function applyPreviewSMSTheme() {
     // Apply colors to the preview elements
-    $("#example .chat_line").each(function() {
+    $("#example .chat_line").each(function () {
         const $chatLine = $(this);
         const $userInfo = $chatLine.find('.user_info');
         const $message = $chatLine.find('.message');
         const $nick = $userInfo.find('.nick');
-        
+
         // Get user color
         let color = $nick.css('color');
-        
+
         // If color is transparent, try to get color from next nick element
         if (color === 'transparent' || color === 'rgba(0, 0, 0, 0)') {
             const $nextNick = $nick.next('.nick');
             if ($nextNick.length) {
-            color = $nextNick.css('color');
+                color = $nextNick.css('color');
             }
         }
 
@@ -348,13 +348,13 @@ function applyPreviewSMSTheme() {
             darkerColor = darkerColor.darken(5);
             colorIsReadable = tinycolor.isReadable("#ffffff", darkerColor, {});
         }
-        
+
         // Create desaturated background for message
         const hsl = tinycolor(color).toHsl();
         hsl.s = 0.5;
         hsl.l = 0.9;
         const lightColor = tinycolor(hsl).toString();
-        
+
         // Apply styles
         $userInfo.css('backgroundColor', darkerColor);
         $message.css('backgroundColor', lightColor);
@@ -365,7 +365,7 @@ function applyPreviewSMSTheme() {
             emotes = ["https://cdn.7tv.app/emote/01GAZ199Z8000FEWHS6AT5QZV0/4x.webp"];
         }
         emote = emotes[Math.floor(Math.random() * emotes.length)];
-        
+
         // Add example message image
         if (!$message.find('.message-image').length) {
             const imageUrl = emote || 'https://cdn.7tv.app/emote/01GAZ199Z8000FEWHS6AT5QZV0/4x.webp';
@@ -384,7 +384,7 @@ function applyPreviewSMSTheme() {
 // Remove SMS theme from preview
 function removePreviewSMSTheme() {
     removeStyles("variant_sms");
-    $("#example .chat_line").each(function() {
+    $("#example .chat_line").each(function () {
         const $chatLine = $(this);
         const $userInfo = $chatLine.find('.user_info');
         const $message = $chatLine.find('.message');
@@ -393,7 +393,7 @@ function removePreviewSMSTheme() {
         $message.css('backgroundColor', '');
         $message[0].style.setProperty('--arrow-color', '');
     });
-    
+
     // Remove images
     $("#example .message-image").remove();
 }
@@ -407,39 +407,46 @@ function smsUpdate(event) {
             removeStyles("variant_center");
         }
 
+        // Disable normal chat option
+        $normalChat.prop("disabled", true);
+        if ($normalChat.is(":checked")) {
+            $normalChat.prop("checked", false);
+        }
+
         // Disable paints and force them off for SMS theme
         $paints.prop("disabled", true);
         $paints.prop("checked", true);
         paintsUpdate();
-        
+
         // Disable colon option and force it off
         $colon.prop("disabled", true);
         $colon.prop("checked", false);
         colonUpdate();
-        
+
         // Disable invert option and ensure it's off
         $invert.prop("disabled", true);
         $invert.prop("checked", false);
-        
+
         // Disable stroke and set to 0
         $stroke.prop("disabled", true);
         $stroke.val("0");
         strokeUpdate();
-        
+
         // Disable shadow and set to 0
         $shadow.prop("disabled", true);
         $shadow.val("0");
         shadowUpdate();
-        
+
         // Apply SMS styling to preview
         applyPreviewSMSTheme();
-        
+
         // Preserve pronouns if they were enabled
         if ($pronouns.is(":checked")) {
             addPronounsToPreview();
         }
     } else {
         $center.prop("disabled", false);
+        $normalChat.prop("disabled", false);
         $paints.prop("disabled", false);
         $colon.prop("disabled", false);
         $invert.prop("disabled", false);
@@ -450,10 +457,10 @@ function smsUpdate(event) {
 
         // Enable center option
         $center.prop("disabled", false);
-        
+
         // Remove SMS styling from preview
         removePreviewSMSTheme();
-        
+
         // Preserve pronouns if they were enabled
         if ($pronouns.is(":checked")) {
             addPronounsToPreview();
@@ -463,6 +470,12 @@ function smsUpdate(event) {
 
 function centerUpdate(event) {
     if ($center.is(":checked")) {
+        // Disable normal chat option
+        $normalChat.prop("disabled", true);
+        if ($normalChat.is(":checked")) {
+            $normalChat.prop("checked", false);
+        }
+
         // Disable SMS option
         $sms.prop("disabled", true);
         if ($sms.is(":checked")) {
@@ -470,10 +483,10 @@ function centerUpdate(event) {
             $(".message-image-field").slideUp();
             removePreviewSMSTheme();
         }
-        
+
         colonUpdate();
         $('span[class="colon"]').css("display", "none");
-        applyStyles("variant_center", 
+        applyStyles("variant_center",
             ".message { width: 45%; display: block; padding-left: 1em; }\n" +
             ".user_info { width: 50%; text-align: right; }\n" +
             ".nick { text-overflow: ellipsis; overflow: hidden; max-width: 60%; display: inline-block; white-space: nowrap; padding-left: 5px; vertical-align: bottom; }\n" +
@@ -481,7 +494,7 @@ function centerUpdate(event) {
             ".chat_line { display: flex; }\n" +
             ".message .emote { vertical-align: top; }"
         );
-        
+
         // Preserve pronouns if they were enabled
         if ($pronouns.is(":checked")) {
             addPronounsToPreview();
@@ -489,11 +502,12 @@ function centerUpdate(event) {
     } else {
         // Enable SMS option
         $sms.prop("disabled", false);
-        
+        $normalChat.prop("disabled", false);
+
         removeStyles("variant_center");
         $('span[class="colon"]').css("display", "inline");
         colonUpdate();
-        
+
         // Preserve pronouns if they were enabled
         if ($pronouns.is(":checked")) {
             addPronounsToPreview();
@@ -555,6 +569,13 @@ function resetForm(event) {
     $disableYTStop.prop("checked", false);
     $disableIMG.prop("checked", false);
     $bigEmotes.prop("checked", false);
+    $highlight.prop("checked", true);
+    $gigantify.prop("checked", true);
+    $showRedeems.prop("checked", true);
+    $highlightMentions.prop("checked", false);
+    $highlightMentionColor.val("#ffff00");
+    $(".highlight-mention-color-field").hide();
+    $normalChat.prop("checked", false);
 
     sizeUpdate();
     fontUpdate();
@@ -568,6 +589,7 @@ function resetForm(event) {
     capsUpdate();
     centerUpdate();
     smsUpdate();
+    normalChatUpdate();
     commandsUpdate();
     pronounsUpdate();
     removePronounsFromPreview();
@@ -580,9 +602,9 @@ function resetForm(event) {
 function backToForm(event) {
     const result = document.getElementById('result');
     const form = document.querySelector('form[name="generator"]');
-    
+
     result.style.animation = 'fadeOut 0.5s forwards';
-    
+
     setTimeout(() => {
         result.classList.add('hidden');
         form.classList.remove('hidden');
@@ -595,112 +617,112 @@ function backToForm(event) {
 
 // Initialize UI animations
 function initializeAnimations() {
-  // Add ripple effect to buttons
-  const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
-  
-  buttons.forEach(button => {
-    button.addEventListener('click', function(e) {
-      const rect = this.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      const ripple = document.createElement('span');
-      ripple.style.position = 'absolute';
-      ripple.style.left = `${x}px`;
-      ripple.style.top = `${y}px`;
-      ripple.style.transform = 'translate(-50%, -50%) scale(0)';
-      ripple.style.width = '0';
-      ripple.style.height = '0';
-      ripple.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
-      ripple.style.borderRadius = '50%';
-      ripple.style.transition = 'all 0.5s';
-      ripple.style.pointerEvents = 'none';
-      
-      this.appendChild(ripple);
-      
-      setTimeout(() => {
-        ripple.style.width = '200px';
-        ripple.style.height = '200px';
-        ripple.style.transform = 'translate(-50%, -50%) scale(1)';
-        ripple.style.opacity = '0';
-      }, 10);
-      
-      setTimeout(() => {
-        ripple.remove();
-      }, 500);
+    // Add ripple effect to buttons
+    const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+
+    buttons.forEach(button => {
+        button.addEventListener('click', function (e) {
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const ripple = document.createElement('span');
+            ripple.style.position = 'absolute';
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            ripple.style.transform = 'translate(-50%, -50%) scale(0)';
+            ripple.style.width = '0';
+            ripple.style.height = '0';
+            ripple.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+            ripple.style.borderRadius = '50%';
+            ripple.style.transition = 'all 0.5s';
+            ripple.style.pointerEvents = 'none';
+
+            this.appendChild(ripple);
+
+            setTimeout(() => {
+                ripple.style.width = '200px';
+                ripple.style.height = '200px';
+                ripple.style.transform = 'translate(-50%, -50%) scale(1)';
+                ripple.style.opacity = '0';
+            }, 10);
+
+            setTimeout(() => {
+                ripple.remove();
+            }, 500);
+        });
     });
-  });
-  
-  // Add shimmer effect to form sections
-  const formSections = document.querySelectorAll('.form-section');
-  let delay = 0;
-  
-  formSections.forEach(section => {
-    section.style.animation = `fadeInDown 0.6s ease ${delay}s both`;
-    delay += 0.1;
-  });
-  
-  // Animate details elements
-  const detailsElements = document.querySelectorAll('details');
-  
-  detailsElements.forEach(details => {
-    details.addEventListener('toggle', function() {
-      const content = this.querySelector('.details-content');
-      if (this.open) {
-        content.style.animation = 'none';
-        // Trigger reflow
-        void content.offsetWidth;
-        content.style.animation = 'fadeInDown 0.3s';
-      }
+
+    // Add shimmer effect to form sections
+    const formSections = document.querySelectorAll('.form-section');
+    let delay = 0;
+
+    formSections.forEach(section => {
+        section.style.animation = `fadeInDown 0.6s ease ${delay}s both`;
+        delay += 0.1;
     });
-  });
+
+    // Animate details elements
+    const detailsElements = document.querySelectorAll('details');
+
+    detailsElements.forEach(details => {
+        details.addEventListener('toggle', function () {
+            const content = this.querySelector('.details-content');
+            if (this.open) {
+                content.style.animation = 'none';
+                // Trigger reflow
+                void content.offsetWidth;
+                content.style.animation = 'fadeInDown 0.3s';
+            }
+        });
+    });
 }
 
 // Nice transition when form is submitted
 function setupFormTransition() {
-  const form = document.querySelector('form[name="generator"]');
-  const result = document.getElementById('result');
-  
-  if (form && result) {
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      // Scroll to top smoothly
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-      
-      // Add exit animation to form
-      form.style.animation = 'fadeOut 0.5s forwards';
-      
-      setTimeout(() => {
-        form.classList.add('hidden');
-        result.classList.remove('hidden');
-        result.style.animation = 'fadeIn 0.5s forwards';
-        
-        // Generate URL
-        generateURL(e);
-      }, 500);
-    });
-  }
+    const form = document.querySelector('form[name="generator"]');
+    const result = document.getElementById('result');
+
+    if (form && result) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            // Scroll to top smoothly
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+
+            // Add exit animation to form
+            form.style.animation = 'fadeOut 0.5s forwards';
+
+            setTimeout(() => {
+                form.classList.add('hidden');
+                result.classList.remove('hidden');
+                result.style.animation = 'fadeIn 0.5s forwards';
+
+                // Generate URL
+                generateURL(e);
+            }, 500);
+        });
+    }
 }
 
 // Toggle light/dark theme
 function setupThemeToggle() {
-  const brightnessToggle = document.getElementById('brightness');
-  const example = document.getElementById('example');
-  
-  if (brightnessToggle && example) {
-    brightnessToggle.addEventListener('click', function() {
-      example.classList.toggle('white');
-      if (example.classList.contains('white')) {
-        brightnessToggle.src = "img/dark.png";
-      } else {
-        brightnessToggle.src = "img/light.png";
-      }
-    });
-  }
+    const brightnessToggle = document.getElementById('brightness');
+    const example = document.getElementById('example');
+
+    if (brightnessToggle && example) {
+        brightnessToggle.addEventListener('click', function () {
+            example.classList.toggle('white');
+            if (example.classList.contains('white')) {
+                brightnessToggle.src = "img/dark.png";
+            } else {
+                brightnessToggle.src = "img/light.png";
+            }
+        });
+    }
 }
 
 function toggleTheme() {
@@ -709,26 +731,26 @@ function toggleTheme() {
 }
 
 // Initialize all the new UI enhancements
-document.addEventListener('DOMContentLoaded', function() {
-  popup.init();
-  initializeAnimations();
-  setupFormTransition();
-  setupThemeToggle();
-  
-  // Initial application of styles
-  applyStyles("size", sizes[2]);
-  
-  // Initialize pronoun settings
-  pronounsUpdate();
-  
-  // Add responsive layout handling
-  adjustFormLayout();
-  window.addEventListener('resize', adjustFormLayout);
-  
-  // Ensure form elements have consistent height
-  document.querySelectorAll('select, input[type="text"]').forEach(el => {
-    el.style.height = '42px';
-  });
+document.addEventListener('DOMContentLoaded', function () {
+    popup.init();
+    initializeAnimations();
+    setupFormTransition();
+    setupThemeToggle();
+
+    // Initial application of styles
+    applyStyles("size", sizes[2]);
+
+    // Initialize pronoun settings
+    pronounsUpdate();
+
+    // Add responsive layout handling
+    adjustFormLayout();
+    window.addEventListener('resize', adjustFormLayout);
+
+    // Ensure form elements have consistent height
+    document.querySelectorAll('select, input[type="text"]').forEach(el => {
+        el.style.height = '42px';
+    });
 });
 
 // Add layout improvement functions
@@ -737,7 +759,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function adjustFormLayout() {
     const formWidth = document.querySelector('.form_table').offsetWidth;
     const formSections = document.querySelectorAll('.form_col');
-    
+
     if (formWidth < 650) {
         formSections.forEach(section => {
             section.style.minWidth = '100%';
@@ -747,7 +769,7 @@ function adjustFormLayout() {
             section.style.minWidth = '320px';
         });
     }
-    
+
     // Adjust checkbox groups based on available width
     const checkboxGroups = document.querySelectorAll('.checkbox-group');
     checkboxGroups.forEach(group => {
@@ -823,6 +845,12 @@ function generateURL(event) {
         pronoun_single_color1: $pronounColorMode.val() === "single" ? $pronounColor1.val() : false,
         pronoun_single_color2: $pronounColorMode.val() === "single" ? $pronounColor2.val() : false,
         pronoun_custom_colors: $pronounColorMode.val() === "custom" ? getPronounCustomColors() : false,
+        highlight: !$highlight.is(":checked") ? "false" : false,
+        gigantify: !$gigantify.is(":checked") ? "false" : false,
+        show_redeems: !$showRedeems.is(":checked") ? "false" : false,
+        highlight_mentions: $highlightMentions.is(":checked"),
+        highlight_mention_color: $highlightMentions.is(":checked") ? $highlightMentionColor.val().replace("#", "") : false,
+        normal_chat: $normalChat.is(":checked"),
     };
 
     const params = encodeQueryData(data);
@@ -835,9 +863,9 @@ const originalBackToForm = backToForm;
 function backToForm(event) {
     const result = document.getElementById('result');
     const form = document.querySelector('form[name="generator"]');
-    
+
     result.style.animation = 'fadeOut 0.5s forwards';
-    
+
     setTimeout(() => {
         result.classList.add('hidden');
         form.classList.remove('hidden');
@@ -852,13 +880,13 @@ function copyUrl(event) {
 
     $alert.css({
         "visibility": "visible",
-        "opacity": "1", 
+        "opacity": "1",
         // "transform": "translateY(0)" 
     });
-    
+
     // Add animation to the alert
     $alert.css("animation", "justFadeIn 0.6s");
-    
+
     setTimeout(() => {
         showUrl();
     }, 2000);
@@ -922,6 +950,12 @@ const $disableIMG = $('input[name="disable_img"]');
 const $pronounColorMode = $('select[name="pronoun_color_mode"]');
 const $pronounColor1 = $('input[name="pronoun_single_color1"]');
 const $pronounColor2 = $('input[name="pronoun_single_color2"]');
+const $highlight = $('input[name="highlight"]');
+const $gigantify = $('input[name="gigantify"]');
+const $showRedeems = $('input[name="show_redeems"]');
+const $highlightMentions = $('input[name="highlight_mentions"]');
+const $highlightMentionColor = $('input[name="highlight_mention_color"]');
+const $normalChat = $('input[name="normal_chat"]');
 
 $fade_bool.change(fadeOption);
 $size.change(sizeUpdate);
@@ -954,15 +988,47 @@ $pronounColor1.change(updatePronounColors);
 $pronounColor2.change(updatePronounColors);
 $pronounColorMode.change(pronounColorModeUpdate);
 $pronouns.change(pronounsUpdate);
+$highlight.change(function () { });
+$gigantify.change(function () { });
+$showRedeems.change(function () { });
+$highlightMentions.change(highlightMentionsUpdate);
+$highlightMentionColor.change(function () { });
+$normalChat.change(normalChatUpdate);
+
+function normalChatUpdate(event) {
+    if ($normalChat.is(":checked")) {
+        $center.prop("disabled", true);
+        if ($center.is(":checked")) {
+            $center.prop("checked", false);
+            removeStyles("variant_center");
+        }
+        $sms.prop("disabled", true);
+        if ($sms.is(":checked")) {
+            $sms.prop("checked", false);
+            removePreviewSMSTheme();
+        }
+    } else {
+        $center.prop("disabled", false);
+        $sms.prop("disabled", false);
+    }
+}
+
+function highlightMentionsUpdate(event) {
+    if ($highlightMentions.is(":checked")) {
+        $(".highlight-mention-color-field").slideDown();
+    } else {
+        $(".highlight-mention-color-field").slideUp();
+    }
+}
 
 // Pronoun color customization functions
 function pronounsUpdate(event) {
     const isChecked = $pronouns.is(":checked");
-    
+
     // Enable/disable pronoun color settings based on checkbox
     $pronounColorMode.prop('disabled', !isChecked);
     $('.pronoun-color-field').toggle(isChecked);
-    
+
     if (isChecked) {
         // Add pronouns to preview
         addPronounsToPreview();
@@ -978,11 +1044,11 @@ function pronounsUpdate(event) {
 
 function addPronounsToPreview() {
     // Add pronoun to Johnnycyan entries in preview
-    $("#example .chat_line").each(function() {
+    $("#example .chat_line").each(function () {
         const $chatLine = $(this);
         const $userInfo = $chatLine.find('.user_info');
         const $nick = $userInfo.find('.nick');
-        
+
         // Check if this is a Johnnycyan message by looking for the nick text
         const nickText = $nick.text().toLowerCase();
         if (nickText.includes('johnnycyan')) {
@@ -1000,7 +1066,7 @@ function addPronounsToPreview() {
             }
         }
     });
-    
+
     // Apply current pronoun colors if custom mode is selected
     updatePronounColors();
 }
@@ -1012,10 +1078,10 @@ function removePronounsFromPreview() {
 
 function pronounColorModeUpdate(event) {
     const mode = $pronounColorMode.val();
-    
+
     // Hide all pronoun color fields first
     $('.pronoun-color-field').hide();
-    
+
     // Only show fields if pronouns are enabled
     if ($pronouns.is(":checked")) {
         if (mode === 'single') {
@@ -1025,7 +1091,7 @@ function pronounColorModeUpdate(event) {
             // generateCustomPronounColorInputs();
         }
     }
-    
+
     updatePronounColors();
 }
 
@@ -1046,11 +1112,11 @@ function generateCustomPronounColorInputs() {
         { display: "E/Em", name: "eem", default1: "#667eea", default2: "#9d64d6" },
         { display: "It/Its", name: "itits", default1: "#f093fb", default2: "#f5576c" }
     ];
-    
+
     const container = $('#pronoun-color-inputs');
     const singleContainer = $('#single-gradient-field');
     container.empty();
-    
+
     pronounTypes.forEach(pronoun => {
         const html = `
             <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 8px; font-size: 16px;">
@@ -1067,35 +1133,35 @@ function generateCustomPronounColorInputs() {
         `;
         container.append(html);
     });
-    
+
     // Add click handler for pronoun labels to reset colors
-    container.find('.pronoun-label').on('click', function() {
+    container.find('.pronoun-label').on('click', function () {
         console.log("Resetting pronoun colors for " + $(this).data('pronoun'));
         const pronounName = $(this).data('pronoun');
         const default1 = $(this).data('default1');
         const default2 = $(this).data('default2');
-        
+
         $(`input[name="pronoun_${pronounName}_color1"]`).val(default1);
         $(`input[name="pronoun_${pronounName}_color2"]`).val(default2);
 
         document.querySelector(`input[name="pronoun_${pronounName}_color1"]`).dispatchEvent(new Event('input', { bubbles: true }));
         document.querySelector(`input[name="pronoun_${pronounName}_color2"]`).dispatchEvent(new Event('input', { bubbles: true }));
-        
+
         updatePronounColors();
     });
 
     // Add click handler for single gradient label to reset colors
-    singleContainer.find('.pronoun-label').on('click', function() {
+    singleContainer.find('.pronoun-label').on('click', function () {
         console.log("Resetting single gradient colors");
         const default1 = $(this).data('default1');
         const default2 = $(this).data('default2');
-        
+
         $pronounColor1.val(default1);
         $pronounColor2.val(default2);
 
         document.querySelector(`input[name="pronoun_single_color1"]`).dispatchEvent(new Event('input', { bubbles: true }));
         document.querySelector(`input[name="pronoun_single_color2"]`).dispatchEvent(new Event('input', { bubbles: true }));
-        
+
         updatePronounColors();
     });
 
@@ -1109,7 +1175,7 @@ function generateCustomPronounColorInputs() {
 function updatePronounColors() {
     const mode = $pronounColorMode.val();
     let customCSS = '';
-    
+
     if (mode === 'single') {
         const color1 = $pronounColor1.val();
         const color2 = $pronounColor2.val();
@@ -1120,11 +1186,11 @@ function updatePronounColors() {
         `;
     } else if (mode === 'custom') {
         const pronounTypes = ['hehim', 'sheher', 'theythem', 'shethem', 'hethem', 'heshe', 'xexem', 'faefaer', 'vever', 'aeaer', 'ziehir', 'perper', 'eem', 'itits'];
-        
+
         pronounTypes.forEach(type => {
             const color1Input = $(`input[name="pronoun_${type}_color1"]`);
             const color2Input = $(`input[name="pronoun_${type}_color2"]`);
-            
+
             if (color1Input.length && color2Input.length) {
                 const color1 = color1Input.val();
                 const color2 = color2Input.val();
@@ -1136,7 +1202,7 @@ function updatePronounColors() {
             }
         });
     }
-    
+
     // Apply the custom CSS
     applyStyles('pronoun-colors', customCSS);
 }
@@ -1144,11 +1210,11 @@ function updatePronounColors() {
 function getPronounCustomColors() {
     const pronounTypes = ['hehim', 'sheher', 'theythem', 'shethem', 'hethem', 'heshe', 'xexem', 'faefaer', 'vever', 'aeaer', 'ziehir', 'perper', 'eem', 'itits'];
     const colors = {};
-    
+
     pronounTypes.forEach(type => {
         const color1Input = $(`input[name="pronoun_${type}_color1"]`);
         const color2Input = $(`input[name="pronoun_${type}_color2"]`);
-        
+
         if (color1Input.length && color2Input.length) {
             colors[type] = {
                 color1: color1Input.val(),
@@ -1156,6 +1222,6 @@ function getPronounCustomColors() {
             };
         }
     });
-    
+
     return JSON.stringify(colors);
 }

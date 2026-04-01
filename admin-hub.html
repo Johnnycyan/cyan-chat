@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: dark;">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Cyan Chat</title>
+    <link rel="icon" type="image/webp" href="https://meow.catt.ing/r/8G9soV.webp?compress=false">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 32px 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 170, 255, 0.04) 0%, transparent 50%);
+        }
+
+        .container {
+            background: #18181b;
+            border: 1px solid #2f2f35;
+            border-radius: 12px;
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #efeff1;
+            text-align: center;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #adadb8;
+            font-size: 0.875rem;
+            margin-bottom: 32px;
+        }
+
+        .brand {
+            color: #00d9ff;
+        }
+
+        .nav-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .nav-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 20px;
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #efeff1;
+            transition: border-color 0.2s, background 0.2s, transform 0.1s;
+        }
+
+        .nav-card:hover {
+            border-color: #00d9ff;
+            background: #1f1f23;
+        }
+
+        .nav-card:active {
+            transform: scale(0.99);
+        }
+
+        .nav-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .nav-icon.channels {
+            background: rgba(0, 217, 255, 0.15);
+            color: #00d9ff;
+        }
+
+        .nav-icon.ytcolors {
+            background: rgba(255, 0, 0, 0.15);
+            color: #ff4444;
+        }
+
+        .nav-text h2 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .nav-text p {
+            font-size: 0.8rem;
+            color: #adadb8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Admin Panel</h1>
+        <p class="subtitle"><span class="brand">Cyan Chat</span></p>
+
+        <div class="nav-grid">
+            <a href="/admin/active" class="nav-card" data-page="active">
+                <div class="nav-icon channels">📡</div>
+                <div class="nav-text">
+                    <h2>Active Channels</h2>
+                    <p>View currently active overlay instances</p>
+                </div>
+            </a>
+            <a href="/admin/yt-colors" class="nav-card" data-page="yt-colors">
+                <div class="nav-icon ytcolors">🎨</div>
+                <div class="nav-text">
+                    <h2>YouTube User Colors</h2>
+                    <p>Set custom chat colors for YouTube users</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Store password and forward to sub-pages via form POST
+        var password = "{{.Password}}";
+
+        document.querySelectorAll('.nav-card').forEach(function (card) {
+            card.addEventListener('click', function (e) {
+                e.preventDefault();
+                var href = this.getAttribute('href');
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = href;
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'password';
+                input.value = password;
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            });
+        });
+    </script>
+</body>
+
+</html>

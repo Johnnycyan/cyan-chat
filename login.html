@@ -4,64 +4,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login</title>
-    <!-- favicon -->
+    <title>Admin Login - Cyan Chat</title>
     <link rel="icon" type="image/webp" href="https://meow.catt.ing/r/8G9soV.webp?compress=false">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 170, 255, 0.04) 0%, transparent 50%);
         }
 
-        .container {
-            background-color: #2a2a2a;
-            border-radius: 25px;
-            padding: 20px;
-            max-width: 300px;
-            filter: drop-shadow(2px 4px 6px black);
-        }
-
-        h1 {
-            color: #00aaff;
-            text-align: center;
-        }
-
-        input[type="password"] {
-            width: 90%;
-            padding: 5%;
-            margin: 10px 0;
-            border: none;
-            border-radius: 15px;
-            background-color: #212121;
-            color: white;
-        }
-
-        input[type="submit"] {
+        .login-card {
+            background: #18181b;
+            border: 1px solid #2f2f35;
+            border-radius: 12px;
+            padding: 40px 36px;
             width: 100%;
-            padding: 5%;
-            background-color: #00aaff;
-            color: #ffffff;
+            max-width: 380px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .login-card h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #efeff1;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .login-card .subtitle {
+            text-align: center;
+            color: #adadb8;
+            font-size: 0.875rem;
+            margin-bottom: 28px;
+        }
+
+        .login-card .brand {
+            color: #00d9ff;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #adadb8;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            border-radius: 8px;
+            color: #efeff1;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        .form-group input[type="password"]:focus {
+            border-color: #00d9ff;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 11px;
+            background: #00d9ff;
+            color: #0e0e10;
             border: none;
-            border-radius: 15px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            filter: drop-shadow(1px 2px 3px black);
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-primary:hover {
+            background: #33e1ff;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
+    <div class="login-card">
         <h1>Admin Login</h1>
+        <p class="subtitle"><span class="brand">Cyan Chat</span></p>
         <form method="POST">
-            <input type="password" name="password" placeholder="Enter password" required>
-            <input type="submit" value="Login">
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password" placeholder="Enter admin password" required
+                    autofocus>
+            </div>
+            <button type="submit" class="btn-primary">Sign In</button>
         </form>
     </div>
 </body>

@@ -54,21 +54,30 @@ type SharedChatParticipant struct {
 
 // SharedChatEvent is the JSON sent to frontend SSE clients
 type SharedChatEvent struct {
-	Type         string                `json:"type"` // "begin", "update", "end"
-	SessionID    string                `json:"session_id"`
-	HostID       string                `json:"host_id"`
-	HostLogin    string                `json:"host_login"`
-	Participants []SharedChatParticipant `json:"participants,omitempty"`
+	Type         string                  `json:"type"` // "begin", "update", "end", "redeem"
+	SessionID    string                  `json:"session_id,omitempty"`
+	HostID       string                  `json:"host_id,omitempty"`
+	HostLogin    string                  `json:"host_login,omitempty"`
+	Participants []SharedChatParticipant  `json:"participants,omitempty"`
+	RewardTitle  string                  `json:"reward_title,omitempty"`
+	RewardID     string                  `json:"reward_id,omitempty"`
+	RewardCost   int                     `json:"reward_cost,omitempty"`
+	UserName     string                  `json:"user_name,omitempty"`
+	UserLogin    string                  `json:"user_login,omitempty"`
+	UserID       string                  `json:"user_id,omitempty"`
+	UserInput    string                  `json:"user_input,omitempty"`
 }
 
 // EventSubChannel tracks an EventSub WS connection for one broadcaster
 type EventSubChannel struct {
-	ChannelID  string
-	Conn       *websocket.Conn
-	SessionID  string
-	SSEClients map[chan SharedChatEvent]bool
-	SSEMutex   sync.Mutex
-	Cancel     context.CancelFunc
+	ChannelID   string
+	Conn        *websocket.Conn
+	SessionID   string
+	SSEClients  map[chan SharedChatEvent]bool
+	SSEMutex    sync.Mutex
+	Cancel      context.CancelFunc
+	PubSubConn  *websocket.Conn
+	PubSubMutex sync.Mutex
 }
 
 var (
@@ -120,6 +129,7 @@ func init() {
 	// Load existing active channels from file
 	loadTokens()
 	loadActiveChannels()
+	loadYTColors()
 }
 
 func loadTokens() {
@@ -218,6 +228,34 @@ func loadTemplateWithFuncMap(filename string, funcMap template.FuncMap) (*templa
 	}
 
 	return tmpl, nil
+}
+
+func handleAdminHub(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		tmpl, err := loadTemplate("login.html")
+		if err != nil {
+			http.Error(w, "Failed to load template", http.StatusInternalServerError)
+			return
+		}
+		tmpl.Execute(w, nil)
+	} else if r.Method == "POST" {
+		r.ParseForm()
+		password := r.FormValue("password")
+		if password != AdminPassword {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		tmpl, err := loadTemplate("admin-hub.html")
+		if err != nil {
+			http.Error(w, "Failed to load template", http.StatusInternalServerError)
+			return
+		}
+
+		tmpl.Execute(w, struct{ Password string }{Password: password})
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func handleAdminActive(w http.ResponseWriter, r *http.Request) {
@@ -884,10 +922,19 @@ func startEventSubForChannel(channelID string) {
 	eventSubChannels[channelID] = esc
 	eventSubMutex.Unlock()
 
+	// Start PubSub for channel point redemptions alongside EventSub
+	go startPubSubForChannel(ctx, esc, channelID)
+
 	defer func() {
 		eventSubMutex.Lock()
 		delete(eventSubChannels, channelID)
 		eventSubMutex.Unlock()
+		// Close PubSub connection
+		esc.PubSubMutex.Lock()
+		if esc.PubSubConn != nil {
+			esc.PubSubConn.Close()
+		}
+		esc.PubSubMutex.Unlock()
 		cancel()
 		log.Printf("[TEMP DEBUG][SharedChat] EventSub stopped for channel %s", channelID)
 	}()
@@ -1010,7 +1057,7 @@ func processEventSubMessages(ctx context.Context, esc *EventSubChannel, conn *we
 	}
 }
 
-// createSharedChatSubscriptions creates the three shared chat EventSub subscriptions
+// createSharedChatSubscriptions creates the shared chat EventSub subscriptions
 func createSharedChatSubscriptions(channelID, sessionID string) error {
 	subTypes := []string{
 		"channel.shared_chat.begin",
@@ -1133,6 +1180,211 @@ func handleEventSubNotification(esc *EventSubChannel, payload json.RawMessage) {
 	broadcastToSSEClients(esc, event)
 }
 
+// ============================================================
+// PubSub for Channel Point Redemptions
+// ============================================================
+
+// startPubSubForChannel connects to Twitch PubSub and listens for community points events
+func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID string) {
+	backoff := time.Second
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		log.Printf("[TEMP DEBUG][PubSub] Connecting for channel %s", channelID)
+
+		conn, _, err := websocket.DefaultDialer.Dial("wss://pubsub-edge.twitch.tv", nil)
+		if err != nil {
+			log.Printf("[TEMP DEBUG][PubSub] Connection error for %s: %v", channelID, err)
+			time.Sleep(backoff)
+			if backoff < 2*time.Minute {
+				backoff *= 2
+			}
+			continue
+		}
+
+		esc.PubSubMutex.Lock()
+		esc.PubSubConn = conn
+		esc.PubSubMutex.Unlock()
+
+		backoff = time.Second // Reset backoff on successful connect
+
+		// Send LISTEN message
+		listenMsg := map[string]interface{}{
+			"type": "LISTEN",
+			"data": map[string]interface{}{
+				"topics":     []string{"community-points-channel-v1." + channelID},
+				"auth_token": accessToken,
+			},
+		}
+
+		if err := conn.WriteJSON(listenMsg); err != nil {
+			log.Printf("[TEMP DEBUG][PubSub] Error sending LISTEN for %s: %v", channelID, err)
+			conn.Close()
+			continue
+		}
+
+		log.Printf("[TEMP DEBUG][PubSub] Sent LISTEN for community-points-channel-v1.%s", channelID)
+
+		// Start PING ticker (every 4 minutes)
+		pingTicker := time.NewTicker(4 * time.Minute)
+
+		err = processPubSubMessages(ctx, esc, conn, channelID, pingTicker)
+		pingTicker.Stop()
+		conn.Close()
+
+		if err != nil {
+			log.Printf("[TEMP DEBUG][PubSub] Error for %s: %v, reconnecting...", channelID, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(backoff)
+			if backoff < 2*time.Minute {
+				backoff *= 2
+			}
+		}
+	}
+}
+
+// processPubSubMessages reads and handles PubSub messages
+func processPubSubMessages(ctx context.Context, esc *EventSubChannel, conn *websocket.Conn, channelID string, pingTicker *time.Ticker) error {
+	// Channel for signaling PONG received
+	pongCh := make(chan struct{}, 1)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-pingTicker.C:
+			// Send PING
+			if err := conn.WriteJSON(map[string]string{"type": "PING"}); err != nil {
+				return fmt.Errorf("error sending PING: %w", err)
+			}
+			// Wait for PONG within 10 seconds
+			go func() {
+				select {
+				case <-pongCh:
+					// PONG received
+				case <-time.After(10 * time.Second):
+					log.Printf("[TEMP DEBUG][PubSub] PONG timeout for %s, closing connection", channelID)
+					conn.Close()
+				case <-ctx.Done():
+				}
+			}()
+		default:
+		}
+
+		conn.SetReadDeadline(time.Now().Add(5*time.Minute + 30*time.Second))
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("read error: %w", err)
+		}
+
+		var msg struct {
+			Type  string          `json:"type"`
+			Error string          `json:"error"`
+			Data  json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Printf("[TEMP DEBUG][PubSub] Error parsing message: %v", err)
+			continue
+		}
+
+		switch msg.Type {
+		case "PONG":
+			select {
+			case pongCh <- struct{}{}:
+			default:
+			}
+
+		case "RESPONSE":
+			if msg.Error != "" {
+				log.Printf("[TEMP DEBUG][PubSub] LISTEN error for %s: %s", channelID, msg.Error)
+			} else {
+				log.Printf("[TEMP DEBUG][PubSub] LISTEN successful for %s", channelID)
+			}
+
+		case "RECONNECT":
+			log.Printf("[TEMP DEBUG][PubSub] Reconnect requested for %s", channelID)
+			return nil
+
+		case "MESSAGE":
+			handlePubSubMessage(esc, msg.Data, channelID)
+		}
+	}
+}
+
+// handlePubSubMessage processes a PubSub MESSAGE
+func handlePubSubMessage(esc *EventSubChannel, data json.RawMessage, channelID string) {
+	var msgData struct {
+		Topic   string `json:"topic"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(data, &msgData); err != nil {
+		log.Printf("[TEMP DEBUG][PubSub] Error parsing message data: %v", err)
+		return
+	}
+
+	// Parse the inner message (it's a JSON string)
+	var innerMsg struct {
+		Type string          `json:"type"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(msgData.Message), &innerMsg); err != nil {
+		log.Printf("[TEMP DEBUG][PubSub] Error parsing inner message: %v", err)
+		return
+	}
+
+	if innerMsg.Type != "reward-redeemed" {
+		return
+	}
+
+	var redeemData struct {
+		Redemption struct {
+			User struct {
+				ID          string `json:"id"`
+				Login       string `json:"login"`
+				DisplayName string `json:"display_name"`
+			} `json:"user"`
+			Reward struct {
+				ID    string `json:"id"`
+				Title string `json:"title"`
+				Cost  int    `json:"cost"`
+			} `json:"reward"`
+			UserInput string `json:"user_input"`
+		} `json:"redemption"`
+	}
+	if err := json.Unmarshal(innerMsg.Data, &redeemData); err != nil {
+		log.Printf("[TEMP DEBUG][PubSub] Error parsing redeem data: %v", err)
+		return
+	}
+
+	r := redeemData.Redemption
+	log.Printf("[TEMP DEBUG][PubSub] Redeem: user=%s, reward=%s (%s)", r.User.Login, r.Reward.Title, r.Reward.ID)
+
+	log.Printf("[TEMP DEBUG][PubSub] Redeem cost: %d", r.Reward.Cost)
+
+	event := SharedChatEvent{
+		Type:        "redeem",
+		RewardTitle: r.Reward.Title,
+		RewardID:    r.Reward.ID,
+		RewardCost:  r.Reward.Cost,
+		UserName:    r.User.DisplayName,
+		UserLogin:   r.User.Login,
+		UserID:      r.User.ID,
+		UserInput:   r.UserInput,
+	}
+
+	broadcastToSSEClients(esc, event)
+}
+
 // stopEventSubForChannel stops the EventSub WS for a channel
 func stopEventSubForChannel(channelID string) {
 	eventSubMutex.RLock()
@@ -1148,6 +1400,128 @@ func stopEventSubForChannel(channelID string) {
 	if esc.Conn != nil {
 		esc.Conn.Close()
 	}
+}
+
+// ============================================================
+// YouTube Chat Color Configuration
+// ============================================================
+
+var (
+	ytColors     map[string]string
+	ytColorsMutex sync.RWMutex
+)
+
+func loadYTColors() {
+	ytColorsMutex.Lock()
+	defer ytColorsMutex.Unlock()
+
+	file, err := os.ReadFile("yt-colors.json")
+	if err != nil {
+		ytColors = make(map[string]string)
+		return
+	}
+
+	if err := json.Unmarshal(file, &ytColors); err != nil {
+		ytColors = make(map[string]string)
+	}
+}
+
+func saveYTColors() error {
+	data, err := json.MarshalIndent(ytColors, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("yt-colors.json", data, 0644)
+}
+
+func handleYTColors(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ytColorsMutex.RLock()
+	defer ytColorsMutex.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(ytColors)
+}
+
+func handleAdminYTColors(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		tmpl, err := loadTemplate("login.html")
+		if err != nil {
+			http.Error(w, "Failed to load template", http.StatusInternalServerError)
+			return
+		}
+		tmpl.Execute(w, nil)
+	} else if r.Method == "POST" {
+		r.ParseForm()
+		password := r.FormValue("password")
+		if password != AdminPassword {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		tmpl, err := loadTemplate("yt-colors-admin.html")
+		if err != nil {
+			http.Error(w, "Failed to load template", http.StatusInternalServerError)
+			return
+		}
+
+		ytColorsMutex.RLock()
+		colors := make(map[string]string)
+		for k, v := range ytColors {
+			colors[k] = v
+		}
+		ytColorsMutex.RUnlock()
+
+		data := struct {
+			Colors   map[string]string
+			Password string
+		}{
+			Colors:   colors,
+			Password: password,
+		}
+
+		tmpl.Execute(w, data)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleAdminYTColorsAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Verify password from header
+	password := r.Header.Get("X-Admin-Password")
+	if password != AdminPassword {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var newColors map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&newColors); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	ytColorsMutex.Lock()
+	ytColors = newColors
+	err := saveYTColors()
+	ytColorsMutex.Unlock()
+
+	if err != nil {
+		http.Error(w, "Failed to save", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
 }
 
 func main() {
@@ -1242,9 +1616,13 @@ func main() {
 	http.HandleFunc("/api/tts", synthesizeSpeechHandler)
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/active", handleActive)
+	http.HandleFunc("/admin", handleAdminHub)
 	http.HandleFunc("/admin/active", handleAdminActive)
 	http.HandleFunc("/api/shared-chat/subscribe", handleSharedChatSubscribe)
 	http.HandleFunc("/api/shared-chat/events", handleSharedChatEvents)
+	http.HandleFunc("/api/yt-colors", handleYTColors)
+	http.HandleFunc("/admin/yt-colors", handleAdminYTColors)
+	http.HandleFunc("/api/admin/yt-colors", handleAdminYTColorsAPI)
 	// serve the current directory as a static web server
 	staticFilesV2 := http.FileServer(http.Dir("./dist"))
 	http.Handle("/", staticFilesV2)

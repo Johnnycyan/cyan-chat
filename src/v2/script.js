@@ -135,6 +135,33 @@ Chat = {
       "big_emotes" in $.QueryString
         ? $.QueryString.big_emotes.toLowerCase() === "true"
         : false,
+    showHighlighted:
+      "highlight" in $.QueryString
+        ? $.QueryString.highlight.toLowerCase() === "true"
+        : true,
+    showGigantifiedEmote:
+      "gigantify" in $.QueryString
+        ? $.QueryString.gigantify.toLowerCase() === "true"
+        : true,
+    highlightMentions:
+      "highlight_mentions" in $.QueryString
+        ? $.QueryString.highlight_mentions.toLowerCase() === "true"
+        : false,
+    highlightMentionColor:
+      "highlight_mention_color" in $.QueryString
+        ? $.QueryString.highlight_mention_color
+        : "ffff00",
+    showRedeems:
+      "show_redeems" in $.QueryString
+        ? $.QueryString.show_redeems.toLowerCase() === "true"
+        : true,
+    normalChat:
+      "normal_chat" in $.QueryString
+        ? $.QueryString.normal_chat.toLowerCase() === "true"
+        : false,
+    redeemNames: {},
+    redeemQueue: [],
+    ytColors: {},
     messageImage:
       "img" in $.QueryString
         ? $.QueryString.img
@@ -337,6 +364,86 @@ Chat = {
             console.log('[TEMP DEBUG][SharedChat] Session ended');
             Chat.cleanupAllSharedChat();
             break;
+
+          case 'redeem': {
+            // Cache the reward name and cost
+            if (data.reward_id && data.reward_title) {
+              Chat.info.redeemNames[data.reward_id] = {
+                title: data.reward_title,
+                cost: data.reward_cost || 0
+              };
+
+              // Process queued IRC messages waiting for this reward's metadata
+              var remaining = [];
+              Chat.info.redeemQueue.forEach(function (queued) {
+                if (queued.rewardId === data.reward_id) {
+                  // Inject reward metadata into the original IRC tags and render
+                  queued.tags["_reward_title"] = data.reward_title;
+                  queued.tags["_reward_cost"] = data.reward_cost || 0;
+                  Chat.write(queued.nick, queued.tags, queued.messageText, "twitch");
+                } else if (Date.now() - queued.timestamp < 30000) {
+                  remaining.push(queued);
+                }
+              });
+              Chat.info.redeemQueue = remaining;
+            }
+
+            // Show text-less redeems directly from PubSub (no IRC message will arrive for these)
+            if (Chat.info.showRedeems && !data.user_input) {
+              var redeemInfo = {
+                "display-name": data.user_name,
+                "user-id": data.user_id,
+                color: null,
+                badges: "",
+                emotes: "",
+                id: "redeem-" + Date.now(),
+                "room-id": Chat.info.channelID,
+                "_redeem_only": true,
+                "_reward_title": data.reward_title,
+                "_reward_cost": data.reward_cost || 0
+              };
+
+              // Fetch user color from Twitch API + load 7TV paints before rendering
+              var redeemNick = data.user_login;
+              var redeemUserId = data.user_id;
+              var renderRedeem = function () {
+                Chat.write(redeemNick, redeemInfo, "", "twitch");
+              };
+
+              // Fetch color and paints in parallel, then render
+              var colorDone = false, paintDone = false;
+              var tryRender = function () {
+                if (colorDone && paintDone) renderRedeem();
+              };
+
+              if (redeemUserId && !Chat.info.colors[redeemNick]) {
+                TwitchAPI("/chat/color?user_id=" + redeemUserId).done(function (res) {
+                  if (res.data && res.data[0]) {
+                    Chat.info.colors[redeemNick] = res.data[0].color || Chat.info.defaultColors[Math.floor(Math.random() * Chat.info.defaultColors.length)];
+                  }
+                }).always(function () {
+                  colorDone = true;
+                  tryRender();
+                });
+              } else {
+                colorDone = true;
+              }
+
+              if (redeemUserId && !Chat.info.seventvPaints[redeemNick]) {
+                Chat.loadUserPaints(redeemNick, redeemUserId);
+                // loadUserPaints is async, give it a moment then render
+                setTimeout(function () {
+                  paintDone = true;
+                  tryRender();
+                }, 500);
+              } else {
+                paintDone = true;
+              }
+
+              tryRender();
+            }
+            break;
+          }
         }
       } catch (e) {
         console.error('[TEMP DEBUG][SharedChat] Error processing SSE event:', e);
@@ -768,6 +875,15 @@ Chat = {
         if (Chat.info.showPronouns) {
           Chat.loadPronounTypes();
         }
+
+        // Load YouTube chat user colors
+        if (Chat.info.yt) {
+          $.getJSON("/api/yt-colors").done(function (res) {
+            if (res) {
+              Chat.info.ytColors = res;
+            }
+          });
+        }
       }
 
       // Load CSS
@@ -800,6 +916,7 @@ Chat = {
         Chat.info.animate = false;
         Chat.info.invert = false;
         Chat.info.sms = false;
+        Chat.info.normalChat = false;
         appendCSS("variant", "center");
       }
 
@@ -812,7 +929,15 @@ Chat = {
         Chat.info.hidePaints = true;
         Chat.info.disablePruning = true;
         Chat.info.hideColon = false;
+        Chat.info.normalChat = false;
         appendCSS("variant", "sms");
+      }
+
+      if (Chat.info.normalChat) {
+        Chat.info.center = false;
+        Chat.info.sms = false;
+        appendCSS("variant", "normalchat");
+        document.body.classList.add("normalchat");
       }
 
       appendCSS("size", size);
@@ -1091,6 +1216,9 @@ Chat = {
   },
 
   getUserColor: function (nick, info) {
+    if (Chat.info.ytColors[nick]) {
+      return Chat.info.ytColors[nick];
+    }
     if (Chat.info.colors[nick]) {
       return Chat.info.colors[nick]
     }
@@ -1328,6 +1456,21 @@ Chat = {
     })();
   },
 
+  buildRedeemLabel: function (title, cost) {
+    var $label = $("<span></span>");
+    $label.addClass("redeem-label");
+    var $text = $("<span></span>").text("Redeemed " + title);
+    $label.append($text);
+    if (cost > 0) {
+      var $cost = $("<span></span>");
+      $cost.addClass("redeem-cost");
+      // Channel points icon (Twitch channel points SVG)
+      $cost.html('<svg class="redeem-cp-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a4 4 0 0 1 4 4h-2a2 2 0 0 0-2-2V6z"></path><path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-2 0a6 6 0 1 1-12 0 6 6 0 0 1 12 0z"></path></svg>' + cost);
+      $label.append($cost);
+    }
+    return $label;
+  },
+
   getAlmostWhiteColor: function (color) {
     // Create a tinycolor object from the input color
     const baseColor = tinycolor(color);
@@ -1402,6 +1545,55 @@ Chat = {
   write: function (nick, info, message, service) {
     nick = Chat.sanitizeUsername(nick);
     if (info) {
+      // Text-less redeem: single-line "{user} redeemed {title} {icon} {cost}"
+      if (info["_redeem_only"] && info["_reward_title"]) {
+        var displayName = info["display-name"] || nick;
+        var $redeemLine = $("<div></div>");
+        $redeemLine.addClass("chat_line channel-point-redeem redeem-only-line");
+        if (Chat.info.animate) $redeemLine.addClass("animate");
+        $redeemLine.attr("data-nick", nick);
+        $redeemLine.attr("data-time", Date.now());
+        $redeemLine.attr("data-id", info.id);
+
+        var $content = $("<span class='redeem-inline'></span>");
+        var $name = $("<span class='nick'></span>").text(displayName);
+        var color = Chat.getUserColor(nick, info, service);
+        $name.css("color", color);
+
+        // Apply 7TV paints to the username
+        if (Chat.info.seventvPaints[nick] && Chat.info.seventvPaints[nick].length > 0) {
+          var paint = Chat.info.seventvPaints[nick][0];
+          if (paint.type === "gradient") {
+            $name[0].style.setProperty("--paint-bg", paint.backgroundImage);
+          } else if (paint.type === "image") {
+            $name[0].style.setProperty("--paint-bg", "url(" + paint.backgroundImage + ")");
+            $name[0].style.setProperty("--paint-bg-color", color);
+            $name[0].style.setProperty("--paint-pos", "center");
+          }
+          $name.attr("data-text", displayName);
+          if (paint.filter) {
+            var dropShadows = paint.filter.match(/drop-shadow\([^)]*\)/g) || [];
+            var finalFilter = dropShadows.map(function (shadow) {
+              return shadow.endsWith("px)") ? shadow : shadow + ")";
+            }).join(' ');
+            if (finalFilter) $name.css("filter", finalFilter);
+          }
+          $name.addClass("paint");
+          if (Chat.info.hidePaints) $name.addClass("nopaint");
+        }
+
+        $content.append($name);
+        $content.append("<span class='redeem-inline-text'> redeemed </span>");
+        $content.append("<span class='redeem-inline-title'>" + escapeHtml(info["_reward_title"]) + "</span>");
+        $content.append(' ');
+        var cost = info["_reward_cost"] || 0;
+        $content.append('<span class="redeem-cost"><svg class="redeem-cp-icon" viewBox="0 0 20 20"><path fill="currentColor" d="M10 6a4 4 0 0 1 4 4h-2a2 2 0 0 0-2-2V6z"/><path fill="currentColor" fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-2 0a6 6 0 1 1-12 0 6 6 0 0 1 12 0z" clip-rule="evenodd"/></svg> ' + cost + '</span>');
+
+        $redeemLine.append($content);
+        Chat.info.lines.push($redeemLine.wrap("<div>").parent().html());
+        return;
+      }
+
       if (Chat.info.regex) {
         if (doesStringMatchPattern(message, Chat.info)) {
           return;
@@ -1988,6 +2180,34 @@ Chat = {
       if (Chat.info.sms) {
         $chatLine = Chat.applySMSTheme($chatLine, color);
       }
+
+      // Highlighted message channel point reward
+      if (Chat.info.showHighlighted && info["msg-id"] === "highlighted-message") {
+        $chatLine.addClass("highlighted-message");
+      }
+
+      // Gigantified emote Power-up
+      if (Chat.info.showGigantifiedEmote && info["msg-id"] === "gigantified-emote-message") {
+        $message.addClass("emote-only");
+        $message.find("img.emote, img.emoji").addClass("large-emote");
+      }
+
+      // Channel point redeem styling (reward metadata injected by IRC handler or PubSub SSE)
+      if (info["custom-reward-id"] && Chat.info.showRedeems && info["_reward_title"]) {
+        $chatLine.addClass("channel-point-redeem");
+        var $redeemLabel = Chat.buildRedeemLabel(info["_reward_title"], info["_reward_cost"] || 0);
+        $chatLine.prepend($redeemLabel);
+      }
+
+      // Highlight messages that mention the channel name
+      if (Chat.info.highlightMentions && Chat.info.channel) {
+        var messageText = $message.text().toLowerCase();
+        if (messageText.includes(Chat.info.channel.toLowerCase())) {
+          $chatLine.addClass("mention-highlight");
+          $chatLine[0].style.setProperty("--mention-color", "#" + Chat.info.highlightMentionColor);
+        }
+      }
+
       Chat.info.lines.push($chatLine.wrap("<div>").parent().html());
       if (hasZeroWidth) {
         // console.log("DEBUG Message with mentions and emotes before fixZeroWidth:", $message.html());
@@ -2630,6 +2850,37 @@ Chat = {
                 !Chat.info.seventvNonSubs[message.tags["user-id"]]
               ) {
                 Chat.loadUserPaints(nick, message.tags["user-id"]);
+              }
+
+              // If this is a channel point redeem, defer rendering until PubSub provides reward metadata
+              if (message.tags["custom-reward-id"] && Chat.info.showRedeems) {
+                var rewardInfo = Chat.info.redeemNames[message.tags["custom-reward-id"]];
+                if (rewardInfo) {
+                  // PubSub already cached this reward — inject metadata and render
+                  message.tags["_reward_title"] = rewardInfo.title;
+                  message.tags["_reward_cost"] = rewardInfo.cost;
+                  Chat.write(nick, message.tags, message.params[1], "twitch");
+                } else {
+                  // PubSub hasn't arrived yet — queue the IRC message and wait
+                  var queueKey = message.tags["custom-reward-id"] + "_" + nick;
+                  Chat.info.redeemQueue.push({
+                    key: queueKey,
+                    rewardId: message.tags["custom-reward-id"],
+                    nick: nick,
+                    tags: message.tags,
+                    messageText: message.params[1],
+                    timestamp: Date.now()
+                  });
+                  // Timeout: render without reward name after 5 seconds if PubSub never arrives
+                  setTimeout(function () {
+                    var idx = Chat.info.redeemQueue.findIndex(function (q) { return q.key === queueKey; });
+                    if (idx !== -1) {
+                      var queued = Chat.info.redeemQueue.splice(idx, 1)[0];
+                      Chat.write(queued.nick, queued.tags, queued.messageText, "twitch");
+                    }
+                  }, 5000);
+                }
+                return;
               }
 
               Chat.write(nick, message.tags, message.params[1], "twitch");

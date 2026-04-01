@@ -4,91 +4,237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Active Channels</title>
-    <!-- favicon -->
+    <title>Active Channels - Cyan Chat Admin</title>
     <link rel="icon" type="image/webp" href="https://meow.catt.ing/r/8G9soV.webp?compress=false">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
-        }
-
-        h1,
-        h2 {
-            color: #00aaff;
-        }
-
-        h1 {
-            margin-top: 0px;
-        }
-
-        .container {
-            background-color: #2a2a2a;
-            border-radius: 25px;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            filter: drop-shadow(2px 4px 6px black);
-        }
-
-        ul {
-            list-style-type: none;
             padding: 0;
         }
 
-        li {
-            margin-bottom: 10px;
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0e0e10;
+            color: #efeff1;
+            min-height: 100vh;
+            padding: 32px 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 217, 255, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(0, 170, 255, 0.04) 0%, transparent 50%);
+        }
+
+        .container {
+            background: #18181b;
+            border: 1px solid #2f2f35;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 800px;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #efeff1;
+        }
+
+        .back-link {
+            color: #00d9ff;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #33e1ff;
+        }
+
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            border-radius: 8px;
+            padding: 16px 20px;
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: #adadb8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #00d9ff;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #efeff1;
+            margin-bottom: 12px;
+        }
+
+        .channel-list {
+            list-style: none;
+            margin-bottom: 24px;
+        }
+
+        .channel-list li {
+            padding: 10px 14px;
+            border-bottom: 1px solid #2f2f35;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .channel-list li:last-child {
+            border-bottom: none;
+        }
+
+        .channel-list .channel-name {
+            color: #efeff1;
+            font-weight: 500;
+        }
+
+        .channel-list .channel-time {
+            color: #adadb8;
+            font-size: 0.8rem;
         }
 
         .collapsible {
-            background-color: #3a3a3a;
-            color: #ffffff;
+            background: #0e0e10;
+            border: 1px solid #2f2f35;
+            color: #efeff1;
             cursor: pointer;
-            padding: 18px;
+            padding: 14px 18px;
             width: 100%;
-            border: none;
             text-align: left;
-            outline: none;
-            font-size: 15px;
-            border-radius: 15px;
-            filter: drop-shadow(1px 2px 3px black);
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: inherit;
+            border-radius: 8px;
+            transition: background 0.2s, border-color 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .active,
         .collapsible:hover {
-            background-color: #4a4a4a;
+            background: #1f1f23;
+            border-color: #3f3f46;
         }
 
-        .active {
-            border-bottom-right-radius: 0px;
-            border-bottom-left-radius: 0px;
+        .collapsible.active {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-color: transparent;
+            background: #1f1f23;
+        }
+
+        .collapsible::after {
+            content: '▸';
+            transition: transform 0.2s;
+        }
+
+        .collapsible.active::after {
+            transform: rotate(90deg);
         }
 
         .content {
-            padding: 0 18px;
             display: none;
-            overflow: hidden;
-            background-color: #4a4a4a;
-            border-bottom-right-radius: 15px;
-            border-bottom-left-radius: 15px;
-            filter: drop-shadow(1px 6px 3px black);
-            border-top: #00aaff 2px solid;
+            background: #1f1f23;
+            border: 1px solid #2f2f35;
+            border-top: none;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            padding: 8px 18px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .content ul {
+            list-style: none;
+        }
+
+        .content ul li {
+            padding: 6px 0;
+            border-bottom: 1px solid #2f2f35;
+            font-size: 0.85rem;
+            color: #adadb8;
+        }
+
+        .content ul li:last-child {
+            border-bottom: none;
+        }
+
+        .content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .content::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 3px;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>Active Channels</h1>
-        <p>Total active channels: {{.Count}}</p>
-        <p>All-time highest active channels: {{.AllTimeHighest}}</p>
-        <h2>Currently Active Channels:</h2>
-        <ul>
+        <div class="header">
+            <h1>Active Channels</h1>
+            <a href="/admin" class="back-link">← Back to Admin</a>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="label">Currently Active</div>
+                <div class="value">{{.Count}}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">All-Time Highest</div>
+                <div class="value">{{.AllTimeHighest}}</div>
+            </div>
+        </div>
+
+        <h2>Currently Active</h2>
+        <ul class="channel-list">
             {{range $channel, $lastActive := .Channels}}
-            <li>{{$channel}} - {{formatTime $lastActive}}</li>
+            <li>
+                <span class="channel-name">{{$channel}}</span>
+                <span class="channel-time">{{formatTime $lastActive}}</span>
+            </li>
             {{end}}
         </ul>
 
@@ -104,9 +250,7 @@
 
     <script>
         var coll = document.getElementsByClassName("collapsible");
-        var i;
-
-        for (i = 0; i < coll.length; i++) {
+        for (var i = 0; i < coll.length; i++) {
             coll[i].addEventListener("click", function () {
                 this.classList.toggle("active");
                 var content = this.nextElementSibling;
