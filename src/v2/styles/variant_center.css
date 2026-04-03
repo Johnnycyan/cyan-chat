@@ -45,6 +45,11 @@
   vertical-align: bottom;
 }
 
+.nick.paint {
+  margin-right: 0.5em;
+  padding-right: 0.07em !important;
+}
+
 .chat_line .paint::before,
 .chat_line .paint::after {
   padding-left: 5px;
@@ -102,6 +107,21 @@
   order: -1;
 }
 
+/* Gigantified Emote overrides for center theme */
+.chat_line.gigantified-emote {
+  flex-wrap: wrap;
+}
+
+.chat_line.gigantified-emote .gigantify-label {
+  width: 100%;
+  justify-content: center;
+  order: -1;
+}
+
+.chat_line.gigantified-emote .message img.gigantified {
+  margin: 0.3em auto;
+}
+
 /* Text-less redeem */
 .redeem-only-line {
   display: flex;
@@ -114,4 +134,12 @@
 
 .mention-highlight {
   padding-left: 0;
+}
+
+.chat_line .paint {
+  line-height: inherit !important;
+}
+
+.mention.paint {
+  line-height: normal !important;
 }

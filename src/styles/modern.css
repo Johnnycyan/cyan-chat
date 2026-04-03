@@ -1,16 +1,16 @@
 :root {
-  --primary: #00D9FF;
-  --primary-light: #5EEAFF;
-  --primary-dark: #00A7C7;
-  --secondary: #8B54FF;
+  --primary: #00d9ff;
+  --primary-light: #5eeaff;
+  --primary-dark: #00a7c7;
+  --secondary: #8b54ff;
   --background: #1a1a1a;
   --surface: #2a2a2a;
   --surface-lighter: #3a3a3a;
   --text-primary: #ffffff;
   --text-secondary: #b0b0b0;
-  --error: #FF5252;
-  --success: #4CAF50;
-  --warning: #FFC107;
+  --error: #ff5252;
+  --success: #4caf50;
+  --warning: #ffc107;
   --border-radius: 12px;
   --transition-speed: 0.3s;
 }
@@ -31,7 +31,9 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   padding: 20px;
   margin-bottom: 20px;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .card:hover {
@@ -58,7 +60,7 @@ header {
 }
 
 header::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -103,6 +105,8 @@ div.card:nth-child(1) > p:nth-child(1) {
 section {
   margin: 0 auto;
   padding: 0 24px 24px;
+  width: 95%;
+  max-width: 960px;
 }
 
 /* Form Styles */
@@ -131,7 +135,7 @@ form {
 }
 
 /* Input Styles */
-input[type="text"], 
+input[type="text"],
 input[type="password"],
 select {
   background-color: var(--surface-lighter);
@@ -146,7 +150,7 @@ select {
   box-sizing: border-box;
 }
 
-input[type="text"]:focus, 
+input[type="text"]:focus,
 input[type="password"]:focus,
 select:focus {
   border-color: var(--primary);
@@ -252,7 +256,7 @@ button:active {
 input[type="submit"]::after,
 input[type="button"]::after,
 button::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -262,7 +266,10 @@ button::after {
   border-radius: var(--border-radius);
   transform: translate(-50%, -50%);
   opacity: 0;
-  transition: width 0.5s, height 0.5s, opacity 0.5s;
+  transition:
+    width 0.5s,
+    height 0.5s,
+    opacity 0.5s;
 }
 
 input[type="submit"]:active::after,
@@ -288,13 +295,44 @@ button:active::after {
   align-items: center;
 }
 
-#example {
+#preview-container {
   background-color: rgba(0, 0, 0, 0.2);
   border-radius: var(--border-radius);
   margin-bottom: 20px;
-  padding: 15px;
-  overflow-y: auto;
-  width: 90%;
+  overflow: hidden;
+  height: 400px;
+  position: relative;
+  width: 100%;
+}
+
+#preview-container.light-bg {
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+#preview-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.preview-header {
+  margin-bottom: 10px;
+}
+
+.preview-header label {
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.preview-header a {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.preview-header a:hover {
+  color: var(--primary-light);
 }
 
 /* Result Section */
@@ -321,7 +359,9 @@ button:active::after {
   top: 10px;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.6s, visibility 0.6s;
+  transition:
+    opacity 0.6s,
+    visibility 0.6s;
 }
 
 /* Details & Summary Styles */
@@ -350,7 +390,8 @@ details[open] summary {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-details > p, details > ul {
+details > p,
+details > ul {
   padding: 15px 20px;
   margin: 0;
 }
@@ -435,7 +476,7 @@ a:hover {
 }
 
 .popup-container::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -464,7 +505,7 @@ a:hover {
 }
 
 .popup-header::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 25%;
@@ -560,7 +601,7 @@ a:hover {
 }
 
 #donation::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -10px;
   left: -10px;
@@ -601,16 +642,16 @@ a:hover {
   .form_table {
     flex-direction: column;
   }
-  
+
   .form_col {
     min-width: 100%;
   }
-  
+
   header {
     flex-direction: column;
     text-align: center;
   }
-  
+
   header img {
     margin-right: 0;
     margin-bottom: 15px;
@@ -640,11 +681,15 @@ a:hover {
 }
 
 .fade-transition {
-  transition: opacity 0.3s, visibility 0.3s;
+  transition:
+    opacity 0.3s,
+    visibility 0.3s;
 }
 
 /* Additional animation for sections */
-section p, section details, section form {
+section p,
+section details,
+section form {
   opacity: 0;
   animation: slideUp 0.5s forwards;
 }
@@ -669,7 +714,9 @@ section form {
   border-radius: var(--border-radius);
   padding: 12px;
   margin-bottom: 15px;
-  transition: transform 0.3s, box-shadow 0.3s;
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
   position: relative;
 }
 
@@ -795,7 +842,9 @@ section form {
   top: 117px;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.6s, visibility 0.6s;
+  transition:
+    opacity 0.6s,
+    visibility 0.6s;
 }
 
 /* Custom Scrollbar */
@@ -871,7 +920,7 @@ section form {
 }
 
 #donation::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -883,7 +932,7 @@ section form {
 }
 
 #donate::after {
-  content: '❤';
+  content: "❤";
   margin-left: 8px;
   font-size: 16px;
   transition: transform 0.3s;
@@ -927,22 +976,22 @@ section form {
 }
 
 @keyframes justFadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+  from {
+    opacity: 0;
   }
-  
-  @keyframes justFadeOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
+  to {
+    opacity: 1;
   }
+}
+
+@keyframes justFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
 
 @keyframes shimmer {
   0% {
@@ -969,15 +1018,66 @@ textarea:focus {
 }
 
 /* Make sections appear with staggered delay */
-section > *:nth-child(1) { animation-delay: 0.1s; }
-section > *:nth-child(2) { animation-delay: 0.2s; }
-section > *:nth-child(3) { animation-delay: 0.3s; }
-section > *:nth-child(4) { animation-delay: 0.4s; }
+section > *:nth-child(1) {
+  animation-delay: 0.1s;
+}
+section > *:nth-child(2) {
+  animation-delay: 0.2s;
+}
+section > *:nth-child(3) {
+  animation-delay: 0.3s;
+}
+section > *:nth-child(4) {
+  animation-delay: 0.4s;
+}
 
-#example .chat_line {
-  transition: transform 0.3s, opacity 0.3s, background-color 0.3s;
-  border-radius: 8px;
-  padding: 5px;
+/* Tab Navigation */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 15px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.tab-btn:hover {
+  color: var(--primary-light);
+  background: rgba(0, 217, 255, 0.05);
+  transform: none;
+  box-shadow: none;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: rgba(0, 217, 255, 0.08);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+  animation: fadeIn 0.3s;
+  width: 100%;
+  max-width: 600px;
 }
 
 /* Tooltip styling */
@@ -1000,7 +1100,9 @@ section > *:nth-child(4) { animation-delay: 0.4s; }
   white-space: nowrap;
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.3s, visibility 0.3s;
+  transition:
+    opacity 0.3s,
+    visibility 0.3s;
   z-index: 100;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   pointer-events: none;
@@ -1037,7 +1139,7 @@ header {
 }
 
 /* Standardize input widths */
-input[type="text"], 
+input[type="text"],
 select {
   width: 100%;
   box-sizing: border-box;
@@ -1086,6 +1188,7 @@ select {
 /* Better submit container */
 #submit_container {
   padding: 15px;
+  width: 100%;
 }
 
 /* Standardize channel inputs */

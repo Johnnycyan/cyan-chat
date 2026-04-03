@@ -35,3 +35,7 @@ body {
 .chat_line.channel-point-redeem {
   background-color: rgba(0, 170, 255, 0.08);
 }
+
+.chat_line.gigantified-emote {
+  background-color: rgba(145, 70, 255, 0.08);
+}

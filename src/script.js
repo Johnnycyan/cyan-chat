@@ -1,5 +1,3 @@
-applyStyles("size", sizes[2]);
-
 function fadeOption(event) {
     if ($fade_bool.is(":checked")) {
         // Show fade seconds input with a smooth transition
@@ -116,8 +114,8 @@ document.addEventListener('DOMContentLoaded', function () {
     popup.init();
     initializeAnimations();
     setupFormTransition();
-    setupThemeToggle();
     generateCustomPronounColorInputs();
+    initTabs();
 
     Coloris({
         el: '.coloris',
@@ -153,8 +151,11 @@ document.addEventListener('DOMContentLoaded', function () {
         swatches: pronounColors
     });
 
-    // Initial application of styles
-    applyStyles("size", sizes[2]);
+    // Initialize pronoun settings
+    pronounsUpdate();
+
+    // Initial preview load
+    updatePreview();
 });
 
 // Unified popup show function
@@ -162,146 +163,13 @@ function showPopup(type) {
     popup.open(type);
 }
 
-function sizeUpdate(event) {
-    let scale = $emoteScale.val();
-    let size;
-    if (scale === "1") {
-        size = sizes[Number($size.val()) - 1];
-    } else if (scale === "2") {
-        size = sizes_ES2[Number($size.val()) - 1];
-    } else if (scale === "3") {
-        size = sizes_ES3[Number($size.val()) - 1];
-    } else {
-        console.log("Invalid scale value:", scale);
-    }
-    applyStyles("size", size);
-}
-
-function heightUpdate(event) {
-    let height = heights[Number($height.val())];
-    let $chatline = $("#example .chat_line");
-    $chatline.css("line-height", height);
-}
-
-const toTitleCase = (phrase) => {
-    return phrase
-        .toLowerCase()
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-};
-
-function fontUpdate(event) {
-    let font = fonts[Number($font.val())];
-    console.log("Font:", font);
-    if (font !== "Custom") {
-        $custom_font.prop("disabled", true);
-        $example.css("font-family", font);
-    } else {
+function fontUpdate() {
+    if ($font.val() === "12") {
         $custom_font.prop("disabled", false);
-        if ($custom_font.val() == "") {
-            console.log("Custom font is empty");
-            return;
-        }
-        console.log("Custom font is not empty");
-        const fontName = toTitleCase($custom_font.val());
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = `https://fonts.googleapis.com/css?family=${fontName}`;
-        document.head.appendChild(link);
-        $example.css("font-family", fontName);
-    }
-}
-
-function customFontUpdate(event) {
-    if ($custom_font.val() == "") {
-        $example.css("font-family", "");
-        console.log("Custom font is empty");
-        return;
-    }
-    console.log("Custom font is not empty");
-    removeCSS("font");
-    const fontName = toTitleCase($custom_font.val());
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css?family=${fontName}`;
-    document.head.appendChild(link);
-    $example.css("font-family", fontName);
-}
-
-function strokeUpdate(event) {
-    if ($stroke.val() == "0") removeStyles("stroke");
-    else {
-        strokeNum = Number($stroke.val()) - 1;
-        if (strokeNum > strokes.Length) {
-            strokeNum = strokes.Length;
-        }
-        let stroke = strokes[strokeNum];
-        applyStyles("stroke", stroke);
-    }
-}
-
-function weightUpdate(event) {
-    weightNum = Number($weight.val()) - 1;
-    if (weightNum > weights.Length) {
-        weightNum = weights.Length;
-    }
-    let weight = weights[weightNum];
-    applyStyles("weight", weight);
-}
-
-function shadowUpdate(event) {
-    $chatLine = $("#example .chat_line");
-    if ($shadow.val() == "0") {
-        $chatLine.css("filter", "unset");
     } else {
-        let shadow = shadows[Number($shadow.val()) - 1];
-        $chatLine.css("filter", shadow);
+        $custom_font.prop("disabled", true);
     }
-}
-
-function badgesUpdate(event) {
-    if ($badges.is(":checked")) {
-        $('img[class="badge"]').addClass("hidden");
-    } else {
-        $('img[class="badge hidden"]').removeClass("hidden");
-    }
-}
-
-function paintsUpdate(event) {
-    if ($paints.is(":checked")) {
-        $('span[class="nick paint"]').addClass("nopaint");
-        $('span[class="mention paint"]').addClass("nopaint");
-    } else {
-        $('span[class="nick paint nopaint"]').removeClass("nopaint");
-        $('span[class="mention paint nopaint"]').removeClass("nopaint");
-    }
-}
-
-function colonUpdate(event) {
-    if ($center.is(":checked")) {
-        $('span[class="nick paint colon"]').removeClass("colon");
-        $('span[class="nick colon"]').removeClass("colon");
-        $('span[class="colon"]').css("display", "none");
-        return;
-    }
-    if ($colon.is(":checked")) {
-        $('span[class="colon"]').css("display", "none");
-        $('span[class="nick paint"]').addClass("colon");
-        $('span[class="nick"]').addClass("colon");
-    } else {
-        $('span[class="colon"]').css("display", "inline");
-        $('span[class="nick paint colon"]').removeClass("colon");
-        $('span[class="nick colon"]').removeClass("colon");
-    }
-}
-
-function capsUpdate(event) {
-    if ($small_caps.is(":checked")) {
-        $example.css("font-variant", "small-caps");
-    } else {
-        $example.css("font-variant", "normal");
-    }
+    updatePreview();
 }
 
 var disabledCommands = [];
@@ -323,210 +191,48 @@ function commandsUpdate(event) {
     });
 }
 
-function applyPreviewSMSTheme() {
-    // Apply colors to the preview elements
-    $("#example .chat_line").each(function () {
-        const $chatLine = $(this);
-        const $userInfo = $chatLine.find('.user_info');
-        const $message = $chatLine.find('.message');
-        const $nick = $userInfo.find('.nick');
-
-        // Get user color
-        let color = $nick.css('color');
-
-        // If color is transparent, try to get color from next nick element
-        if (color === 'transparent' || color === 'rgba(0, 0, 0, 0)') {
-            const $nextNick = $nick.next('.nick');
-            if ($nextNick.length) {
-                color = $nextNick.css('color');
-            }
-        }
-
-        var colorIsReadable = tinycolor.isReadable("#ffffff", tinycolor(color), {});
-        var darkerColor = tinycolor(color);
-        while (!colorIsReadable) {
-            darkerColor = darkerColor.darken(5);
-            colorIsReadable = tinycolor.isReadable("#ffffff", darkerColor, {});
-        }
-
-        // Create desaturated background for message
-        const hsl = tinycolor(color).toHsl();
-        hsl.s = 0.5;
-        hsl.l = 0.9;
-        const lightColor = tinycolor(hsl).toString();
-
-        // Apply styles
-        $userInfo.css('backgroundColor', darkerColor);
-        $message.css('backgroundColor', lightColor);
-        $message[0].style.setProperty('--arrow-color', lightColor);
-
-        emotes = $messageImage.val().split(",");
-        if (emotes.length == 0) {
-            emotes = ["https://cdn.7tv.app/emote/01GAZ199Z8000FEWHS6AT5QZV0/4x.webp"];
-        }
-        emote = emotes[Math.floor(Math.random() * emotes.length)];
-
-        // Add example message image
-        if (!$message.find('.message-image').length) {
-            const imageUrl = emote || 'https://cdn.7tv.app/emote/01GAZ199Z8000FEWHS6AT5QZV0/4x.webp';
-            const $img = $('<img>', {
-                src: imageUrl,
-                class: 'message-image',
-                alt: ''
-            });
-            $message.append($img);
-        }
-    });
-
-    applyStyles("variant_sms", sms);
-}
-
-// Remove SMS theme from preview
-function removePreviewSMSTheme() {
-    removeStyles("variant_sms");
-    $("#example .chat_line").each(function () {
-        const $chatLine = $(this);
-        const $userInfo = $chatLine.find('.user_info');
-        const $message = $chatLine.find('.message');
-        const $nick = $userInfo.find('.nick');
-        $userInfo.css('backgroundColor', '');
-        $message.css('backgroundColor', '');
-        $message[0].style.setProperty('--arrow-color', '');
-    });
-
-    // Remove images
-    $("#example .message-image").remove();
-}
-
-function smsUpdate(event) {
+function smsUpdate() {
     if ($sms.is(":checked")) {
-        // Disable center option 
         $center.prop("disabled", true);
-        if ($center.is(":checked")) {
-            $center.prop("checked", false);
-            removeStyles("variant_center");
-        }
-
-        // Disable normal chat option
+        if ($center.is(":checked")) { $center.prop("checked", false); }
         $normalChat.prop("disabled", true);
-        if ($normalChat.is(":checked")) {
-            $normalChat.prop("checked", false);
-        }
-
-        // Disable paints and force them off for SMS theme
-        $paints.prop("disabled", true);
-        $paints.prop("checked", true);
-        paintsUpdate();
-
-        // Disable colon option and force it off
-        $colon.prop("disabled", true);
-        $colon.prop("checked", false);
-        colonUpdate();
-
-        // Disable invert option and ensure it's off
-        $invert.prop("disabled", true);
-        $invert.prop("checked", false);
-
-        // Disable stroke and set to 0
-        $stroke.prop("disabled", true);
-        $stroke.val("0");
-        strokeUpdate();
-
-        // Disable shadow and set to 0
-        $shadow.prop("disabled", true);
-        $shadow.val("0");
-        shadowUpdate();
-
-        // Apply SMS styling to preview
-        applyPreviewSMSTheme();
-
-        // Preserve pronouns if they were enabled
-        if ($pronouns.is(":checked")) {
-            addPronounsToPreview();
-        }
+        if ($normalChat.is(":checked")) { $normalChat.prop("checked", false); }
+        $paints.prop("disabled", true).prop("checked", true);
+        $colon.prop("disabled", true).prop("checked", false);
+        $invert.prop("disabled", true).prop("checked", false);
+        $stroke.prop("disabled", true).val("0");
+        $shadow.prop("disabled", true).val("0");
+        $(".message-image-field").slideDown();
     } else {
         $center.prop("disabled", false);
         $normalChat.prop("disabled", false);
-        $paints.prop("disabled", false);
+        $paints.prop("disabled", false).prop("checked", false);
         $colon.prop("disabled", false);
         $invert.prop("disabled", false);
         $stroke.prop("disabled", false);
         $shadow.prop("disabled", false);
-        $paints.prop("checked", false);
-        paintsUpdate();
-
-        // Enable center option
-        $center.prop("disabled", false);
-
-        // Remove SMS styling from preview
-        removePreviewSMSTheme();
-
-        // Preserve pronouns if they were enabled
-        if ($pronouns.is(":checked")) {
-            addPronounsToPreview();
-        }
+        $(".message-image-field").slideUp();
     }
+    updatePreview();
 }
 
-function centerUpdate(event) {
+function centerUpdate() {
     if ($center.is(":checked")) {
-        // Disable normal chat option
         $normalChat.prop("disabled", true);
-        if ($normalChat.is(":checked")) {
-            $normalChat.prop("checked", false);
-        }
-
-        // Disable SMS option
+        if ($normalChat.is(":checked")) { $normalChat.prop("checked", false); }
         $sms.prop("disabled", true);
         if ($sms.is(":checked")) {
             $sms.prop("checked", false);
             $(".message-image-field").slideUp();
-            removePreviewSMSTheme();
-        }
-
-        colonUpdate();
-        $('span[class="colon"]').css("display", "none");
-        applyStyles("variant_center",
-            ".message { width: 45%; display: block; padding-left: 1em; }\n" +
-            ".user_info { width: 50%; text-align: right; }\n" +
-            ".nick { text-overflow: ellipsis; overflow: hidden; max-width: 60%; display: inline-block; white-space: nowrap; padding-left: 5px; vertical-align: bottom; }\n" +
-            ".colon { display: none; }\n" +
-            ".chat_line { display: flex; }\n" +
-            ".message .emote { vertical-align: top; }"
-        );
-
-        // Preserve pronouns if they were enabled
-        if ($pronouns.is(":checked")) {
-            addPronounsToPreview();
         }
     } else {
-        // Enable SMS option
         $sms.prop("disabled", false);
         $normalChat.prop("disabled", false);
-
-        removeStyles("variant_center");
-        $('span[class="colon"]').css("display", "inline");
-        colonUpdate();
-
-        // Preserve pronouns if they were enabled
-        if ($pronouns.is(":checked")) {
-            addPronounsToPreview();
-        }
     }
+    updatePreview();
 }
 
-function bigEmoteUpdate(event) {
-    // look for all items with the class should-be-big and add the classes emote-only and large-emote
-    if ($bigEmotes.is(":checked")) {
-        $(".should-be-big").addClass("emote-only large-emote");
-        $(".should-be-big").removeClass("emote");
-    } else {
-        $(".should-be-big").removeClass("emote-only large-emote");
-        $(".should-be-big").addClass("emote");
-    }
-}
-
-function resetForm(event) {
+function resetForm() {
     $channel.val("");
     $ytChannel.val("");
     $regex.val("");
@@ -535,7 +241,7 @@ function resetForm(event) {
     $emoteScale.val("1");
     $scale.val("1");
     $font.val("0");
-    $height.val("4");
+    $height.val("3");
     $voice.val("Brian");
     $stroke.val("0");
     $weight.val("4");
@@ -560,11 +266,14 @@ function resetForm(event) {
     $pronounColorMode.val("default");
     $pronounColorMode.prop("disabled", true);
     $('.pronoun-color-field').hide();
+    $(".pronoun-sub-options").hide();
     $custom_font.prop("disabled", true);
     $sms.prop("checked", false);
     $messageImage.val("");
+    $(".message-image-field").hide();
     $disableTTS.prop("checked", false);
     $disableRickroll.prop("checked", false);
+    $ytEmotes.prop("checked", true);
     $disableYTPlay.prop("checked", false);
     $disableYTStop.prop("checked", false);
     $disableIMG.prop("checked", false);
@@ -577,40 +286,21 @@ function resetForm(event) {
     $(".highlight-mention-color-field").hide();
     $normalChat.prop("checked", false);
 
-    sizeUpdate();
-    fontUpdate();
-    heightUpdate();
-    strokeUpdate();
-    weightUpdate();
-    shadowUpdate();
-    badgesUpdate();
-    paintsUpdate();
-    colonUpdate();
-    capsUpdate();
-    centerUpdate();
-    smsUpdate();
-    normalChatUpdate();
-    commandsUpdate();
-    pronounsUpdate();
-    removePronounsFromPreview();
+    // Re-enable all disabled fields
+    $center.prop("disabled", false);
+    $normalChat.prop("disabled", false);
+    $paints.prop("disabled", false);
+    $colon.prop("disabled", false);
+    $invert.prop("disabled", false);
+    $stroke.prop("disabled", false);
+    $shadow.prop("disabled", false);
+    $sms.prop("disabled", false);
+    disabledCommands = [];
 
     $result.addClass("hidden");
     $generator.removeClass("hidden");
     showUrl();
-}
-
-function backToForm(event) {
-    const result = document.getElementById('result');
-    const form = document.querySelector('form[name="generator"]');
-
-    result.style.animation = 'fadeOut 0.5s forwards';
-
-    setTimeout(() => {
-        result.classList.add('hidden');
-        form.classList.remove('hidden');
-        form.style.animation = 'fadeIn 0.5s forwards';
-        $alert.css("visibility", "hidden");
-    }, 500);
+    updatePreview();
 }
 
 // Add animations and UI enhancements
@@ -708,82 +398,6 @@ function setupFormTransition() {
     }
 }
 
-// Toggle light/dark theme
-function setupThemeToggle() {
-    const brightnessToggle = document.getElementById('brightness');
-    const example = document.getElementById('example');
-
-    if (brightnessToggle && example) {
-        brightnessToggle.addEventListener('click', function () {
-            example.classList.toggle('white');
-            if (example.classList.contains('white')) {
-                brightnessToggle.src = "img/dark.png";
-            } else {
-                brightnessToggle.src = "img/light.png";
-            }
-        });
-    }
-}
-
-function toggleTheme() {
-    const example = document.getElementById('example');
-    example.classList.toggle('white');
-}
-
-// Initialize all the new UI enhancements
-document.addEventListener('DOMContentLoaded', function () {
-    popup.init();
-    initializeAnimations();
-    setupFormTransition();
-    setupThemeToggle();
-
-    // Initial application of styles
-    applyStyles("size", sizes[2]);
-
-    // Initialize pronoun settings
-    pronounsUpdate();
-
-    // Add responsive layout handling
-    adjustFormLayout();
-    window.addEventListener('resize', adjustFormLayout);
-
-    // Ensure form elements have consistent height
-    document.querySelectorAll('select, input[type="text"]').forEach(el => {
-        el.style.height = '42px';
-    });
-});
-
-// Add layout improvement functions
-
-// Adjust form layout based on screen size
-function adjustFormLayout() {
-    const formWidth = document.querySelector('.form_table').offsetWidth;
-    const formSections = document.querySelectorAll('.form_col');
-
-    if (formWidth < 650) {
-        formSections.forEach(section => {
-            section.style.minWidth = '100%';
-        });
-    } else {
-        formSections.forEach(section => {
-            section.style.minWidth = '320px';
-        });
-    }
-
-    // Adjust checkbox groups based on available width
-    const checkboxGroups = document.querySelectorAll('.checkbox-group');
-    checkboxGroups.forEach(group => {
-        const parentWidth = group.parentElement.offsetWidth;
-        if (parentWidth < 500) {
-            group.style.gridTemplateColumns = '1fr';
-        } else {
-            group.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
-        }
-    });
-}
-
-// Override the original generateURL function to use our new transition
-const originalGenerateURL = generateURL;
 function generateURL(event) {
     event.preventDefault();
 
@@ -805,7 +419,7 @@ function generateURL(event) {
     }
 
     var selectedFont;
-    if (fonts[Number($font.val())] == "Custom") {
+    if ($font.val() === "12") {
         selectedFont = $custom_font.val();
     } else {
         selectedFont = $font.val();
@@ -837,10 +451,11 @@ function generateURL(event) {
         disable_pruning: $pruning.is(":checked"),
         block: $blockedUsers.val().replace(/\s+/g, ""),
         yt: $ytChannel.val().replace('@', ''),
+        yt_emotes: !$ytEmotes.is(":checked") ? "false" : false,
         sms: $sms.is(":checked"),
         message_image: $sms.is(":checked") ? $messageImage.val() : false,
         big_emotes: $bigEmotes.is(":checked"),
-        off_commands: disabledCommands.join(","),
+        off_commands: disabledCommands.length > 0 ? disabledCommands.join(",") : false,
         pronoun_color_mode: $pronounColorMode.val() !== "default" ? $pronounColorMode.val() : false,
         pronoun_single_color1: $pronounColorMode.val() === "single" ? $pronounColor1.val() : false,
         pronoun_single_color2: $pronounColorMode.val() === "single" ? $pronounColor2.val() : false,
@@ -858,9 +473,7 @@ function generateURL(event) {
     $url.val(generatedUrl + "&" + params);
 }
 
-// Override backToForm with smooth transitions
-const originalBackToForm = backToForm;
-function backToForm(event) {
+function backToForm() {
     const result = document.getElementById('result');
     const form = document.querySelector('form[name="generator"]');
 
@@ -874,17 +487,14 @@ function backToForm(event) {
     }, 500);
 }
 
-// Enhanced copy URL function
-function copyUrl(event) {
+function copyUrl() {
     navigator.clipboard.writeText($url.val());
 
     $alert.css({
         "visibility": "visible",
         "opacity": "1",
-        // "transform": "translateY(0)" 
     });
 
-    // Add animation to the alert
     $alert.css("animation", "justFadeIn 0.6s");
 
     setTimeout(() => {
@@ -892,12 +502,86 @@ function copyUrl(event) {
     }, 2000);
 }
 
-// Smooth alert hide transition
-function showUrl(event) {
+function showUrl() {
     $alert.css({
         "opacity": "0",
         "visibility": "hidden",
         "animation": "justFadeOut 0.6s"
+    });
+}
+
+// Preview iframe update (debounced)
+let previewTimeout = null;
+function updatePreview() {
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(function () {
+        const $frame = $('#preview-frame');
+        if (!$frame.length) return;
+
+        var selectedFont;
+        if ($font.val() === "12") {
+            selectedFont = $custom_font.val();
+        } else {
+            selectedFont = $font.val();
+        }
+
+        let data = {
+            preview: true,
+            channel: 'cyanchat',
+            size: $size.val(),
+            emoteScale: $emoteScale.val(),
+            font: selectedFont,
+            height: $height.val(),
+            stroke: $stroke.val() != "0" ? $stroke.val() : false,
+            weight: $weight.val() != "4" ? $weight.val() : false,
+            shadow: $shadow.val() != "0" ? $shadow.val() : false,
+            bots: true,
+            hide_commands: $commands.is(":checked"),
+            hide_badges: $badges.is(":checked"),
+            hide_paints: $paints.is(":checked"),
+            pronouns: $pronouns.is(":checked"),
+            hide_colon: $colon.is(":checked"),
+            animate: $animate.is(":checked"),
+            fade: false,
+            small_caps: $small_caps.is(":checked"),
+            invert: $invert.is(":checked"),
+            center: $center.is(":checked"),
+            readable: $readable.is(":checked"),
+            disable_sync: $sync.is(":checked"),
+            disable_pruning: true,
+            sms: $sms.is(":checked"),
+            message_image: $sms.is(":checked") ? ($messageImage.val() || false) : false,
+            big_emotes: $bigEmotes.is(":checked"),
+            off_commands: disabledCommands.length > 0 ? disabledCommands.join(",") : false,
+            pronoun_color_mode: $pronounColorMode.val() !== "default" ? $pronounColorMode.val() : false,
+            pronoun_single_color1: $pronounColorMode.val() === "single" ? $pronounColor1.val() : false,
+            pronoun_single_color2: $pronounColorMode.val() === "single" ? $pronounColor2.val() : false,
+            pronoun_custom_colors: $pronounColorMode.val() === "custom" ? getPronounCustomColors() : false,
+            highlight: !$highlight.is(":checked") ? "false" : false,
+            gigantify: !$gigantify.is(":checked") ? "false" : false,
+            show_redeems: !$showRedeems.is(":checked") ? "false" : false,
+            highlight_mentions: $highlightMentions.is(":checked"),
+            highlight_mention_color: $highlightMentions.is(":checked") ? $highlightMentionColor.val().replace("#", "") : false,
+            normal_chat: $normalChat.is(":checked"),
+        };
+
+        const params = encodeQueryData(data);
+        $frame.attr('src', 'v2/?' + params);
+    }, 500);
+}
+
+function togglePreviewBackground() {
+    document.getElementById('preview-container').classList.toggle('light-bg');
+}
+
+// Tab switching
+function initTabs() {
+    $('.tab-btn').on('click', function () {
+        const tabId = $(this).data('tab');
+        $('.tab-btn').removeClass('active');
+        $(this).addClass('active');
+        $('.tab-content').removeClass('active');
+        $('#tab-' + tabId).addClass('active');
     });
 }
 
@@ -930,8 +614,6 @@ const $custom_font = $("input[name='custom_font']");
 const $stroke = $("select[name='stroke']");
 const $weight = $("select[name='weight']");
 const $shadow = $("select[name='shadow']");
-const $brightness = $("#brightness");
-const $example = $("#example");
 const $result = $("#result");
 const $url = $("#url");
 const $alert = $("#alert");
@@ -944,6 +626,7 @@ const $messageImage = $('input[name="message_image"]');
 const $bigEmotes = $('input[name="big_emotes"]');
 const $disableTTS = $('input[name="disable_tts"]');
 const $disableRickroll = $('input[name="disable_rickroll"]');
+const $ytEmotes = $('input[name="yt_emotes"]');
 const $disableYTPlay = $('input[name="disable_ytplay"]');
 const $disableYTStop = $('input[name="disable_ytstop"]');
 const $disableIMG = $('input[name="disable_img"]');
@@ -957,142 +640,83 @@ const $highlightMentions = $('input[name="highlight_mentions"]');
 const $highlightMentionColor = $('input[name="highlight_mention_color"]');
 const $normalChat = $('input[name="normal_chat"]');
 
+// Specific handlers for options with interdependencies
 $fade_bool.change(fadeOption);
-$size.change(sizeUpdate);
-$emoteScale.change(sizeUpdate);
 $font.change(fontUpdate);
-$height.change(heightUpdate);
-$custom_font.change(customFontUpdate);
-$stroke.change(strokeUpdate);
-$weight.change(weightUpdate);
-$shadow.change(shadowUpdate);
-$small_caps.change(capsUpdate);
 $center.change(centerUpdate);
-$badges.change(badgesUpdate);
-$paints.change(paintsUpdate);
-$colon.change(colonUpdate);
-$generator.submit(generateURL);
-$url.click(copyUrl);
-$alert.click(showUrl);
-$reset.click(resetForm);
-$goBack.click(backToForm);
 $sms.change(smsUpdate);
-$bigEmotes.change(bigEmoteUpdate);
+$normalChat.change(normalChatUpdate);
+$pronouns.change(pronounsUpdate);
+$pronounColorMode.change(pronounColorModeUpdate);
+$highlightMentions.change(highlightMentionsUpdate);
 $disableTTS.change(commandsUpdate);
 $disableRickroll.change(commandsUpdate);
 $disableYTPlay.change(commandsUpdate);
 $disableYTStop.change(commandsUpdate);
 $disableIMG.change(commandsUpdate);
-$pronounColorMode.change(pronounColorModeUpdate);
-$pronounColor1.change(updatePronounColors);
-$pronounColor2.change(updatePronounColors);
-$pronounColorMode.change(pronounColorModeUpdate);
-$pronouns.change(pronounsUpdate);
-$highlight.change(function () { });
-$gigantify.change(function () { });
-$showRedeems.change(function () { });
-$highlightMentions.change(highlightMentionsUpdate);
-$highlightMentionColor.change(function () { });
-$normalChat.change(normalChatUpdate);
+$generator.submit(generateURL);
+$url.click(copyUrl);
+$alert.click(showUrl);
+$reset.click(resetForm);
+$goBack.click(backToForm);
 
-function normalChatUpdate(event) {
+// Generic handler: any form change triggers preview update
+$('form[name="generator"] select, form[name="generator"] input').on('change input', function () {
+    if ($(this).attr('name') === 'channel' || $(this).attr('name') === 'yt-channel') return;
+    updatePreview();
+});
+
+function normalChatUpdate() {
     if ($normalChat.is(":checked")) {
         $center.prop("disabled", true);
-        if ($center.is(":checked")) {
-            $center.prop("checked", false);
-            removeStyles("variant_center");
-        }
+        if ($center.is(":checked")) { $center.prop("checked", false); }
         $sms.prop("disabled", true);
         if ($sms.is(":checked")) {
             $sms.prop("checked", false);
-            removePreviewSMSTheme();
+            $(".message-image-field").slideUp();
         }
     } else {
         $center.prop("disabled", false);
         $sms.prop("disabled", false);
     }
+    updatePreview();
 }
 
-function highlightMentionsUpdate(event) {
+function highlightMentionsUpdate() {
     if ($highlightMentions.is(":checked")) {
         $(".highlight-mention-color-field").slideDown();
     } else {
         $(".highlight-mention-color-field").slideUp();
     }
+    updatePreview();
 }
 
-// Pronoun color customization functions
-function pronounsUpdate(event) {
+function pronounsUpdate() {
     const isChecked = $pronouns.is(":checked");
-
-    // Enable/disable pronoun color settings based on checkbox
     $pronounColorMode.prop('disabled', !isChecked);
-    $('.pronoun-color-field').toggle(isChecked);
 
     if (isChecked) {
-        // Add pronouns to preview
-        addPronounsToPreview();
-        // Show pronoun color settings if not default
+        $(".pronoun-sub-options").slideDown();
         pronounColorModeUpdate();
     } else {
-        // Remove pronouns from preview
-        removePronounsFromPreview();
-        // Hide pronoun color settings
+        $(".pronoun-sub-options").slideUp();
         $('.pronoun-color-field').hide();
     }
+    updatePreview();
 }
 
-function addPronounsToPreview() {
-    // Add pronoun to Johnnycyan entries in preview
-    $("#example .chat_line").each(function () {
-        const $chatLine = $(this);
-        const $userInfo = $chatLine.find('.user_info');
-        const $nick = $userInfo.find('.nick');
-
-        // Check if this is a Johnnycyan message by looking for the nick text
-        const nickText = $nick.text().toLowerCase();
-        if (nickText.includes('johnnycyan')) {
-            // Only add if pronoun doesn't already exist
-            if (!$userInfo.find('.pronoun').length) {
-                const $pronoun = $('<span class="pronoun hehim">He/Him</span>');
-                // Insert pronoun before the colon
-                const $colon = $userInfo.find('.colon');
-                if ($colon.length) {
-                    $colon.before($pronoun);
-                } else {
-                    // If no colon found, append to userInfo
-                    $userInfo.append($pronoun);
-                }
-            }
-        }
-    });
-
-    // Apply current pronoun colors if custom mode is selected
-    updatePronounColors();
-}
-
-function removePronounsFromPreview() {
-    // Remove all pronoun elements from preview
-    $("#example .pronoun").remove();
-}
-
-function pronounColorModeUpdate(event) {
+function pronounColorModeUpdate() {
     const mode = $pronounColorMode.val();
-
-    // Hide all pronoun color fields first
     $('.pronoun-color-field').hide();
 
-    // Only show fields if pronouns are enabled
     if ($pronouns.is(":checked")) {
         if (mode === 'single') {
             $('#single-gradient-field').show();
         } else if (mode === 'custom') {
             $('#custom-colors-field').show();
-            // generateCustomPronounColorInputs();
         }
     }
-
-    updatePronounColors();
+    updatePreview();
 }
 
 function generateCustomPronounColorInputs() {
@@ -1173,38 +797,7 @@ function generateCustomPronounColorInputs() {
 }
 
 function updatePronounColors() {
-    const mode = $pronounColorMode.val();
-    let customCSS = '';
-
-    if (mode === 'single') {
-        const color1 = $pronounColor1.val();
-        const color2 = $pronounColor2.val();
-        customCSS = `
-            .pronoun {
-                background: linear-gradient(135deg, ${color1} 0%, ${color2} 100%) !important;
-            }
-        `;
-    } else if (mode === 'custom') {
-        const pronounTypes = ['hehim', 'sheher', 'theythem', 'shethem', 'hethem', 'heshe', 'xexem', 'faefaer', 'vever', 'aeaer', 'ziehir', 'perper', 'eem', 'itits'];
-
-        pronounTypes.forEach(type => {
-            const color1Input = $(`input[name="pronoun_${type}_color1"]`);
-            const color2Input = $(`input[name="pronoun_${type}_color2"]`);
-
-            if (color1Input.length && color2Input.length) {
-                const color1 = color1Input.val();
-                const color2 = color2Input.val();
-                customCSS += `
-                    .pronoun.${type} {
-                        background: linear-gradient(135deg, ${color1} 0%, ${color2} 100%) !important;
-                    }
-                `;
-            }
-        });
-    }
-
-    // Apply the custom CSS
-    applyStyles('pronoun-colors', customCSS);
+    updatePreview();
 }
 
 function getPronounCustomColors() {

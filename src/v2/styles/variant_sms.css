@@ -181,6 +181,25 @@
   top: 1.5em; /* Push username pill below redeem label */
 }
 
+/* Gigantified Emote overrides for SMS theme */
+.chat_line.gigantified-emote {
+  padding-top: 3.2em; /* Extra space: gigantify label + username pill */
+}
+
+.chat_line.gigantified-emote .gigantify-label {
+  position: absolute;
+  top: 0.1em;
+  left: 0;
+  right: 0;
+  padding: 0.1em 0.4em;
+  font-size: 0.65em;
+  z-index: 3;
+}
+
+.chat_line.gigantified-emote .user_info {
+  top: 1.5em; /* Push username pill below gigantify label */
+}
+
 /* Text-less redeem */
 .redeem-only-line {
   background-color: transparent; /* No bubble background */

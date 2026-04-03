@@ -329,6 +329,48 @@ body {
   font-weight: bold;
 }
 
+/* Gigantified Emote Power-up */
+.gigantified-emote {
+  position: relative;
+  background-color: rgba(145, 70, 255, 0.15);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.gigantified-emote .gigantify-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.75em;
+  color: #bbb;
+  padding: 2px 0;
+  font-style: italic;
+}
+
+.gigantified-emote .gigantify-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+  color: #bbb;
+  margin-left: 0.4em;
+}
+
+.gigantified-emote .gigantify-bits-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: middle;
+  opacity: 0.9;
+  color: #b9a3e3;
+}
+
+.gigantified-emote .message img.gigantified {
+  max-height: none !important;
+  max-width: none !important;
+  width: 7em;
+  height: auto;
+  display: block;
+  margin: 0.3em 0;
+}
+
 /* Mention Highlight */
 .mention-highlight {
   background-color: color-mix(

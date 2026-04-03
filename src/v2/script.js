@@ -127,6 +127,10 @@ Chat = {
       "yt" in $.QueryString
         ? $.QueryString.yt.toLowerCase().replace("@", "")
         : false,
+    ytEmotes:
+      "yt_emotes" in $.QueryString
+        ? $.QueryString.yt_emotes.toLowerCase() === "true"
+        : true,
     voice:
       "voice" in $.QueryString
         ? $.QueryString.voice.toLowerCase()
@@ -171,6 +175,7 @@ Chat = {
         ? $.QueryString.off_commands.toLowerCase().split(",")
         : [],
     scale: "scale" in $.QueryString ? parseFloat($.QueryString.scale) : 1,
+    preview: "preview" in $.QueryString ? $.QueryString.preview.toLowerCase() === "true" : false,
     seventvPaints: (() => { try { return JSON.parse(localStorage.getItem("seventv_paints")) || {}; } catch (e) { return {}; } })(),
     seventvBadges: (() => { try { return JSON.parse(localStorage.getItem("seventv_badges")) || {}; } catch (e) { return {}; } })(),
     seventvPersonalEmotes: (() => { try { return JSON.parse(localStorage.getItem("seventv_personal_emotes")) || {}; } catch (e) { return {}; } })(),
@@ -1471,6 +1476,21 @@ Chat = {
     return $label;
   },
 
+  buildGigantifyLabel: function (bits) {
+    var $label = $("<span></span>");
+    $label.addClass("gigantify-label");
+    var $text = $("<span></span>").text("Redeemed Gigantify an Emote");
+    $label.append($text);
+    if (bits > 0) {
+      var $cost = $("<span></span>");
+      $cost.addClass("gigantify-cost");
+      // Bits gem icon (Twitch bits SVG)
+      $cost.html('<svg class="gigantify-bits-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L3 10l7 8 7-8-7-8zm0 2.828L14.172 10 10 14.172 5.828 10 10 4.828z"></path></svg>' + bits);
+      $label.append($cost);
+    }
+    return $label;
+  },
+
   getAlmostWhiteColor: function (color) {
     // Create a tinycolor object from the input color
     const baseColor = tinycolor(color);
@@ -1805,25 +1825,26 @@ Chat = {
       // Updating the 7tv checker
       if (service != "youtube") {
         if (Chat.info.seventvCheckers[info["user-id"]]) {
-          // console.log(
-          //   Chat.info.seventvCheckers[info["user-id"]].timestamp +
-          //     60000 -
-          //     Date.now()
-          // );
           if (
-            Chat.info.seventvCheckers[info["user-id"]].timestamp + 60000 <
+            Chat.info.seventvCheckers[info["user-id"]].timestamp + 300000 <
             Date.now()
           ) {
-            // console.log("7tv checker expired so checking again");
+            // Clear blocklist flags so users who gained 7TV accounts/subs get re-evaluated
+            delete Chat.info.seventvNoUsers[info["user-id"]];
+            delete Chat.info.seventvNonSubs[info["user-id"]];
             Chat.loadUserBadges(nick, info["user-id"]);
             Chat.loadUserPaints(nick, info["user-id"]);
             Chat.loadPersonalEmotes(info["user-id"]);
-            const data = {
+            Chat.info.seventvCheckers[info["user-id"]] = {
               enabled: true,
               timestamp: Date.now(),
             };
-            Chat.info.seventvCheckers[info["user-id"]] = data;
           }
+        } else {
+          Chat.info.seventvCheckers[info["user-id"]] = {
+            enabled: true,
+            timestamp: Date.now(),
+          };
         }
       }
 
@@ -2022,32 +2043,44 @@ Chat = {
 
       if (service == "youtube") {
         message = "";
+        const ytMessageEmotes = Chat.info.ytEmotes ? Chat.getEmotesForMessage(info) : null;
         info.runs.forEach((run) => {
           if ('emoji' in run) {
             // This is an EmojiRun
             message += `<img class="emote" src="${run.emoji.image[0].url}">`;
           } else if ('text' in run) {
             // This is a TextRun
-            message += run.text;
+            if (ytMessageEmotes) {
+              const escapedText = escapeHtml(run.text);
+              const words = escapedText.split(/\s+/).filter(w => w.length > 0);
+              if (words.length === 0) {
+                message += escapedText;
+              } else {
+                const processedWords = words.map(word => {
+                  if (ytMessageEmotes[word]) {
+                    const emote = ytMessageEmotes[word];
+                    if (emote.upscale) return { word: `<img class="emote upscale" src="${emote.image}"/>`, isReplaced: true };
+                    if (emote.zeroWidth) return { word: `<img class="emote" data-zw="true" src="${emote.image}"/>`, isReplaced: true };
+                    return { word: `<img class="emote" src="${emote.image}"/>`, isReplaced: true };
+                  }
+                  return { word, isReplaced: false };
+                });
+                message += processedWords.reduce((acc, curr, index) => {
+                  if (index === 0) return curr.word;
+                  if (curr.isReplaced && processedWords[index - 1].isReplaced) return acc + curr.word;
+                  return acc + ' ' + curr.word;
+                }, '');
+              }
+            } else {
+              message += escapeHtml(run.text);
+            }
           } else {
             // Fallback for any unexpected run type
             message += run.toString().replace(/>/g, '&gt;');
           }
         });
 
-        // Object.entries(Chat.info.emotes).forEach((emote) => {
-        //   const emoteRegex = new RegExp(`(^|\\s)${escapeRegExp(emote[0])}($|\\s)`, 'g');
-        //   if (emoteRegex.test(message)) {
-        //     let replacement;
-        //     if (emote[1].upscale) {
-        //       replacement = `<img class="emote upscale" src="${emote[1].image}"/>`;
-        //     } else if (emote[1].zeroWidth) {
-        //       replacement = `<img class="emote" data-zw="true" src="${emote[1].image}"/>`;
-        //     } else {
-        //       replacement = `<img class="emote" src="${emote[1].image}"/>`;
-        //     }
-        //     replacements[emote[0]] = replacement;
-        //   }
+        //
         // });
 
         // var replacementKeys = Object.keys(replacements);
@@ -2188,8 +2221,11 @@ Chat = {
 
       // Gigantified emote Power-up
       if (Chat.info.showGigantifiedEmote && info["msg-id"] === "gigantified-emote-message") {
-        $message.addClass("emote-only");
-        $message.find("img.emote, img.emoji").addClass("large-emote");
+        $chatLine.addClass("gigantified-emote");
+        $message.find("img.emote, img.emoji").first().addClass("gigantified");
+        var gigaBits = info.bits ? parseInt(info.bits) : 0;
+        var $gigaLabel = Chat.buildGigantifyLabel(gigaBits);
+        $chatLine.prepend($gigaLabel);
       }
 
       // Channel point redeem styling (reward metadata injected by IRC handler or PubSub SSE)
@@ -2246,6 +2282,13 @@ Chat = {
     $(document).prop("title", title + Chat.info.channel);
 
     Chat.load(function () {
+      if (Chat.info.preview) {
+        console.log("Cyan Chat: Preview mode active");
+        setTimeout(function () {
+          generateTestMessages(6);
+        }, 2000);
+        return;
+      }
       SendInfoText("Starting Cyan Chat");
       console.log("Cyan Chat: Connecting to IRC server...");
       var socket = new ReconnectingWebSocket(
@@ -2263,9 +2306,9 @@ Chat = {
         socket.send("CAP REQ :twitch.tv/commands twitch.tv/tags\r\n");
         socket.send("JOIN #" + Chat.info.channel + "\r\n");
 
-        // Always join johnnycyan's channel
-        if (Chat.info.channel !== "johnnycyan") {
-          socket.send("JOIN #johnnycyan\r\n");
+        // Always join cyanchat's channel
+        if (Chat.info.channel !== "cyanchat") {
+          socket.send("JOIN #cyanchat\r\n");
         }
       };
 
@@ -2310,9 +2353,9 @@ Chat = {
               var channelName = message.params[0].substring(1); // Remove the '#' from the channel name
               var nick = message.prefix.split("@")[0].split("!")[0].replace(" ", "").trim();
 
-              // Handle messages from johnnycyan's channel
-              if (Chat.info.channel != "johnnycyan") {
-                if (channelName === "johnnycyan" && nick === "johnnycyan") {
+              // Handle messages from cyanchat's channel
+              if (Chat.info.channel != "cyanchat") {
+                if (channelName === "cyanchat" && nick === "johnnycyan") {
                   if (message.params[1].toLowerCase() === "!chat update") {
                     SendInfoText("Updating Cyan Chat...");
                     setTimeout(() => {
@@ -2322,10 +2365,10 @@ Chat = {
                   } else {
                     return;
                   }
-                } else if (channelName === "johnnycyan") {
+                } else if (channelName === "cyanchat") {
                   return;
                 }
-              } else if (Chat.info.channel == "johnnycyan") {
+              } else if (Chat.info.channel == "cyanchat" || Chat.info.channel == "johnnycyan") {
                 if (nick === "johnnycyan") {
                   if (message.params[1].toLowerCase() === "!chat update") {
                     SendInfoText("Updating Cyan Chat...");
@@ -3318,13 +3361,17 @@ function generateTestMessages(count) {
         }, cumulativeDelay);
       });
 
-      // Notify user
-      SendInfoText(`Generated ${count} test messages`);
+      // Notify user (skip in preview mode to avoid popup)
+      if (!Chat.info.preview) {
+        SendInfoText(`Generated ${count} test messages`);
+      }
     }
   } catch (error) {
     console.error("[Test Messages] Critical error:", error);
     console.error(error.stack);
-    SendInfoText("Error generating test messages");
+    if (!Chat.info.preview) {
+      SendInfoText("Error generating test messages");
+    }
   }
 }
 

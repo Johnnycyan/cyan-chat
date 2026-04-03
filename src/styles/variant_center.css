@@ -1,12 +1,38 @@
+@keyframes slide-left {
+  from {
+    opacity: 0%;
+    margin-right: -1000px;
+    padding-left: 1000px;
+  }
+  to {
+    opacity: 100%;
+    margin-right: 0px;
+    padding-left: 0px;
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0%;
+    margin-left: -1000px;
+    padding-right: 1000px;
+  }
+  to {
+    opacity: 100%;
+    margin-left: 0px;
+    padding-right: 0px;
+  }
+}
+
 .message {
   width: 45%;
   display: block;
-  padding-left: 1em;
 }
 
 .user_info {
   width: 50%;
   text-align: right;
+  margin-right: 0.5em;
 }
 
 .nick {
@@ -19,14 +45,86 @@
   vertical-align: bottom;
 }
 
+.nick.paint {
+  margin-right: 0.5em;
+  padding-right: 0.07em !important;
+}
+
+.chat_line .paint::before,
+.chat_line .paint::after {
+  padding-left: 5px;
+}
+
 .colon {
   display: none;
 }
 
+.pronoun {
+  display: inline-block;
+  font-size: 0.65em;
+  font-weight: 600;
+  margin-left: 0.4em;
+  padding: 0.2em 0.5em;
+  border-radius: 0.8em;
+  color: black !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  vertical-align: middle;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 100%
+  ); /* Default gradient */
+}
+
+.pronoun:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
 .chat_line {
+  animation-name: slide-left;
+  animation-duration: 0.3s;
+  animation-timing-function: ease-in-out;
   display: flex;
 }
 
 .message .emote {
   vertical-align: top;
+}
+
+/* Channel Point Redeem overrides for center theme */
+.chat_line.channel-point-redeem {
+  flex-wrap: wrap;
+}
+
+.chat_line.channel-point-redeem .redeem-label {
+  width: 100%;
+  justify-content: center;
+  order: -1;
+}
+
+/* Text-less redeem */
+.redeem-only-line {
+  display: flex;
+  justify-content: center;
+}
+
+.redeem-only-line .redeem-inline {
+  justify-content: center;
+}
+
+.mention-highlight {
+  padding-left: 0;
+}
+
+.chat_line .paint {
+  line-height: inherit !important;
+}
+
+.mention.paint {
+  line-height: normal !important;
 }

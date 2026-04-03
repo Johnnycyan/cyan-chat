@@ -51,6 +51,7 @@
   text-shadow: none !important; /* No shadow on the main element */
   background: none !important; /* Hide inline background so we can move it to ::after */
   color: transparent !important; /* Hide inline color */
+  line-height: normal;
 }
 
 /* Layer 2 (Middle): Gradient Background. z-index -1 */

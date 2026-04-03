@@ -1257,27 +1257,40 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 func processPubSubMessages(ctx context.Context, esc *EventSubChannel, conn *websocket.Conn, channelID string, pingTicker *time.Ticker) error {
 	// Channel for signaling PONG received
 	pongCh := make(chan struct{}, 1)
+	errCh := make(chan error, 1)
+
+	// Separate goroutine for sending PINGs so they fire even when ReadMessage blocks
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-pingTicker.C:
+				if err := conn.WriteJSON(map[string]string{"type": "PING"}); err != nil {
+					errCh <- fmt.Errorf("error sending PING: %w", err)
+					return
+				}
+				// Wait for PONG within 10 seconds
+				select {
+				case <-pongCh:
+					// PONG received, all good
+				case <-time.After(10 * time.Second):
+					log.Printf("[TEMP DEBUG][PubSub] PONG timeout for %s, closing connection", channelID)
+					conn.Close()
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-pingTicker.C:
-			// Send PING
-			if err := conn.WriteJSON(map[string]string{"type": "PING"}); err != nil {
-				return fmt.Errorf("error sending PING: %w", err)
-			}
-			// Wait for PONG within 10 seconds
-			go func() {
-				select {
-				case <-pongCh:
-					// PONG received
-				case <-time.After(10 * time.Second):
-					log.Printf("[TEMP DEBUG][PubSub] PONG timeout for %s, closing connection", channelID)
-					conn.Close()
-				case <-ctx.Done():
-				}
-			}()
+		case err := <-errCh:
+			return err
 		default:
 		}
 
