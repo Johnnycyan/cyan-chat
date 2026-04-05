@@ -12,6 +12,7 @@ compile.bat
 pack.bat
 run.bat
 chat
-src/media/
+src/media/rickroll.webm
+src/media/stickbug.mp4
 backup/
 *.bak
