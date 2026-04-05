@@ -1232,7 +1232,7 @@ Chat = {
 
   getUserColor: function (nick, info) {
     if (Chat.info.ytColors[nick]) {
-      return Chat.info.ytColors[nick];
+      return "#" + Chat.info.ytColors[nick];
     }
     if (Chat.info.colors[nick]) {
       return Chat.info.colors[nick]
