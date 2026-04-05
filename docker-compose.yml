@@ -5,7 +5,7 @@ services:
       - "1535:1535"
     volumes:
       - ./data:/app/data
-      - ./src/media:/app/dist/media
+      - ./media:/app/dist/media
     environment:
       - YOUTUBE_WS_HOST=localhost:9905
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}

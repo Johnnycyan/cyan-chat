@@ -2845,10 +2845,32 @@ Chat = {
               }
               // #endregion Test Messages
 
+              // #region PRESENCE (any user can trigger for themselves)
+              if (
+                message.params[1].toLowerCase() === "!chat presence" ||
+                message.params[1].toLowerCase() === "!chatis presence" ||
+                message.params[1].toLowerCase() === "#presence"
+              ) {
+                var userID = message.tags["user-id"];
+                console.log("Cyan Chat: Refreshing 7TV presence for " + nick + " (" + userID + ")");
+                delete Chat.info.seventvNoUsers[userID];
+                delete Chat.info.seventvNonSubs[userID];
+                Chat.loadUserBadges(nick, userID);
+                Chat.loadUserPaints(nick, userID);
+                Chat.loadPersonalEmotes(userID);
+                Chat.info.seventvCheckers[userID] = {
+                  enabled: true,
+                  timestamp: Date.now(),
+                };
+                return;
+              }
+              // #endregion PRESENCE
+
               // #endregion COMMANDS
 
               if (Chat.info.hideCommands) {
                 if (/^!.+/.test(message.params[1])) return;
+                if (message.params[1].toLowerCase() === "#presence") return;
               }
 
               if (!Chat.info.showBots) {
