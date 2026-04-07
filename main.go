@@ -70,12 +70,14 @@ type SharedChatEvent struct {
 
 // EventSubChannel tracks SSE clients and PubSub for one broadcaster
 type EventSubChannel struct {
-	ChannelID   string
-	SSEClients  map[chan SharedChatEvent]bool
-	SSEMutex    sync.Mutex
-	Cancel      context.CancelFunc
-	PubSubConn  *websocket.Conn
-	PubSubMutex sync.Mutex
+	ChannelID       string
+	SSEClients      map[chan SharedChatEvent]bool
+	SSEMutex        sync.Mutex
+	Cancel          context.CancelFunc
+	PubSubConn      *websocket.Conn
+	PubSubMutex     sync.Mutex
+	SubscriptionIDs []string // Twitch EventSub subscription IDs for cleanup
+	SubIDsMutex     sync.Mutex
 }
 
 var (
@@ -748,11 +750,14 @@ func relay(src, dst *websocket.Conn, direction, channelID string) error {
 	for {
 		messageType, message, err := src.ReadMessage()
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				return nil
 			}
 			// Improve "use of closed network connection" check
 			if strings.Contains(err.Error(), "use of closed network connection") {
+				return nil
+			}
+			if strings.Contains(err.Error(), "unexpected EOF") {
 				return nil
 			}
 			log.Printf("[%s] Channel %s Read error: %v", direction, channelID, err)
@@ -760,7 +765,7 @@ func relay(src, dst *websocket.Conn, direction, channelID string) error {
 		}
 		err = dst.WriteMessage(messageType, message)
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				return nil
 			}
 			if strings.Contains(err.Error(), "use of closed network connection") {
@@ -1003,13 +1008,23 @@ func (p *eventSubPoolT) subscribeChannel(channelID string) error {
 	}
 	p.mu.Unlock()
 
-	err = createSharedChatSubscriptions(channelID, sid)
+	subIDs, err := createSharedChatSubscriptions(channelID, sid)
 	if err == nil {
 		p.mu.Lock()
 		if p.subscribed != nil {
 			p.subscribed[channelID] = true
 		}
 		p.mu.Unlock()
+
+		// Store subscription IDs on the channel for cleanup
+		eventSubMutex.RLock()
+		esc, exists := eventSubChannels[channelID]
+		eventSubMutex.RUnlock()
+		if exists {
+			esc.SubIDsMutex.Lock()
+			esc.SubscriptionIDs = append(esc.SubscriptionIDs, subIDs...)
+			esc.SubIDsMutex.Unlock()
+		}
 	}
 	return err
 }
@@ -1182,18 +1197,31 @@ func (p *eventSubPoolT) resubscribeAll() {
 		p.subscribed[channelID] = true
 		p.mu.Unlock()
 
-		if err := createSharedChatSubscriptions(channelID, sid); err != nil {
+		subIDs, err := createSharedChatSubscriptions(channelID, sid)
+		if err != nil {
 			log.Printf("[TEMP DEBUG][SharedChat] Pool: error re-subscribing channel %s: %v", channelID, err)
+		} else {
+			eventSubMutex.RLock()
+			esc, exists := eventSubChannels[channelID]
+			eventSubMutex.RUnlock()
+			if exists {
+				esc.SubIDsMutex.Lock()
+				esc.SubscriptionIDs = subIDs // Replace with new session's IDs
+				esc.SubIDsMutex.Unlock()
+			}
 		}
 	}
 }
 
 // createSharedChatSubscriptions creates the shared chat EventSub subscriptions
-func createSharedChatSubscriptions(channelID, sessionID string) error {
+// Returns the subscription IDs for later cleanup
+func createSharedChatSubscriptions(channelID, sessionID string) ([]string, error) {
 	subTypes := []string{
 		"channel.shared_chat.update",
 		"channel.shared_chat.end",
 	}
+
+	var subIDs []string
 
 	for _, subType := range subTypes {
 		body := map[string]interface{}{
@@ -1210,12 +1238,12 @@ func createSharedChatSubscriptions(channelID, sessionID string) error {
 
 		bodyBytes, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("error marshaling subscription body: %w", err)
+			return nil, fmt.Errorf("error marshaling subscription body: %w", err)
 		}
 
 		req, err := http.NewRequest("POST", "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewReader(bodyBytes))
 		if err != nil {
-			return fmt.Errorf("error creating subscription request: %w", err)
+			return nil, fmt.Errorf("error creating subscription request: %w", err)
 		}
 
 		req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -1224,7 +1252,7 @@ func createSharedChatSubscriptions(channelID, sessionID string) error {
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("error sending subscription request: %w", err)
+			return nil, fmt.Errorf("error sending subscription request: %w", err)
 		}
 
 		respBody, _ := io.ReadAll(resp.Body)
@@ -1233,13 +1261,16 @@ func createSharedChatSubscriptions(channelID, sessionID string) error {
 		if resp.StatusCode == http.StatusUnauthorized {
 			log.Printf("[TEMP DEBUG][SharedChat] Token expired, refreshing...")
 			if err := refreshTokenOnce(); err != nil {
-				return fmt.Errorf("error refreshing token: %w", err)
+				return nil, fmt.Errorf("error refreshing token: %w", err)
 			}
 			// Retry the subscription
-			req.Header.Set("Authorization", "Bearer "+accessToken)
-			resp, err = http.DefaultClient.Do(req)
+			retryReq, _ := http.NewRequest("POST", "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewReader(bodyBytes))
+			retryReq.Header.Set("Authorization", "Bearer "+accessToken)
+			retryReq.Header.Set("Client-Id", clientID)
+			retryReq.Header.Set("Content-Type", "application/json")
+			resp, err = http.DefaultClient.Do(retryReq)
 			if err != nil {
-				return fmt.Errorf("error retrying subscription: %w", err)
+				return nil, fmt.Errorf("error retrying subscription: %w", err)
 			}
 			respBody, _ = io.ReadAll(resp.Body)
 			resp.Body.Close()
@@ -1263,16 +1294,59 @@ func createSharedChatSubscriptions(channelID, sessionID string) error {
 					log.Printf("[TEMP DEBUG][SharedChat] Subscription %s retry failed (%d): %s", subType, resp2.StatusCode, string(retryBody))
 				} else {
 					log.Printf("[TEMP DEBUG][SharedChat] Subscription %s created for channel %s (after retry)", subType, channelID)
+					if id := parseSubscriptionID(retryBody); id != "" {
+						subIDs = append(subIDs, id)
+					}
 				}
 			}
 		} else if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 			log.Printf("[TEMP DEBUG][SharedChat] Subscription %s failed (%d): %s", subType, resp.StatusCode, string(respBody))
 		} else {
 			log.Printf("[TEMP DEBUG][SharedChat] Subscription %s created for channel %s", subType, channelID)
+			if id := parseSubscriptionID(respBody); id != "" {
+				subIDs = append(subIDs, id)
+			}
 		}
 	}
 
-	return nil
+	return subIDs, nil
+}
+
+// parseSubscriptionID extracts the subscription ID from a Twitch EventSub creation response
+func parseSubscriptionID(body []byte) string {
+	var resp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err == nil && len(resp.Data) > 0 {
+		return resp.Data[0].ID
+	}
+	return ""
+}
+
+// deleteSubscriptions deletes EventSub subscriptions by ID from Twitch
+func deleteSubscriptions(ids []string) {
+	for _, id := range ids {
+		req, err := http.NewRequest("DELETE", "https://api.twitch.tv/helix/eventsub/subscriptions?id="+url.QueryEscape(id), nil)
+		if err != nil {
+			log.Printf("[TEMP DEBUG][SharedChat] Error creating delete request for sub %s: %v", id, err)
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Client-Id", clientID)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("[TEMP DEBUG][SharedChat] Error deleting subscription %s: %v", id, err)
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
+			log.Printf("[TEMP DEBUG][SharedChat] Deleted subscription %s", id)
+		} else {
+			log.Printf("[TEMP DEBUG][SharedChat] Delete subscription %s returned %d", id, resp.StatusCode)
+		}
+	}
 }
 
 // handleEventSubNotification processes a notification from EventSub
@@ -1355,7 +1429,7 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 		if err != nil {
 			log.Printf("[TEMP DEBUG][PubSub] Connection error for %s: %v", channelID, err)
 			time.Sleep(backoff)
-			if backoff < 2*time.Minute {
+			if backoff < 30*time.Second {
 				backoff *= 2
 			}
 			continue
@@ -1400,7 +1474,7 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 			return
 		default:
 			time.Sleep(backoff)
-			if backoff < 2*time.Minute {
+			if backoff < 30*time.Second {
 				backoff *= 2
 			}
 		}
@@ -1473,7 +1547,8 @@ func processPubSubMessages(ctx context.Context, esc *EventSubChannel, conn *webs
 
 		case "RESPONSE":
 			if msg.Error != "" {
-				log.Printf("[TEMP DEBUG][PubSub] LISTEN error for %s: %s", channelID, msg.Error)
+				log.Printf("[TEMP DEBUG][PubSub] LISTEN error for %s: %s, will reconnect with fresh token", channelID, msg.Error)
+				return fmt.Errorf("LISTEN error: %s", msg.Error)
 			} else {
 				log.Printf("[TEMP DEBUG][PubSub] LISTEN successful for %s", channelID)
 			}
@@ -1563,6 +1638,21 @@ func stopEventSubForChannel(channelID string) {
 	}
 
 	log.Printf("[TEMP DEBUG][SharedChat] Stopping EventSub for channel %s", channelID)
+
+	// Delete EventSub subscriptions from Twitch to free up cost
+	esc.SubIDsMutex.Lock()
+	subIDs := esc.SubscriptionIDs
+	esc.SubscriptionIDs = nil
+	esc.SubIDsMutex.Unlock()
+	if len(subIDs) > 0 {
+		go deleteSubscriptions(subIDs)
+	}
+
+	// Remove from pool's subscribed map so channel can resubscribe later
+	esPool.mu.Lock()
+	delete(esPool.subscribed, channelID)
+	esPool.mu.Unlock()
+
 	esc.Cancel() // Stops PubSub goroutine
 	// Close PubSub connection
 	esc.PubSubMutex.Lock()
