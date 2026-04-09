@@ -10,10 +10,16 @@ if (Chat.info.yt) {
 
 	yt_socket.onopen = function () {
 		console.log('YouTube: Connected');
+		yt_socket.reconnectInterval = 5000;
 	};
 
-	yt_socket.onclose = function () {
-		console.log('YouTube: Disconnected');
+	yt_socket.onclose = function (event) {
+		if (event.reason === 'Could not find stream by channel identifier') {
+			console.log('YouTube: Channel not live, retrying in 60s');
+			yt_socket.reconnectInterval = 60000;
+		} else {
+			console.log('YouTube: Disconnected');
+		}
 	};
 
 	function formatMessage(message) {
@@ -29,7 +35,7 @@ if (Chat.info.yt) {
 			if (!Chat.info.userBadges[authorName]) {
 				Chat.info.userBadges[authorName] = [];
 			}
-			
+
 			message.author.badges.forEach(badge => {
 				if (badge && badge.url) {
 					const userBadge = {
