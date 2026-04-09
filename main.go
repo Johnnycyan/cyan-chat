@@ -728,7 +728,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	youtubeConn, _, err := websocket.DefaultDialer.Dial("ws://"+ytWsHost+"/c/"+channel, nil)
 	if err != nil {
-		log.Println("YouTube WebSocket connection error:", err)
+		log.Println("YouTube WebSocket connection error for channel:", channel, "error:", err)
 		return
 	}
 	defer youtubeConn.Close()
