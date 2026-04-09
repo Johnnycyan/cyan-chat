@@ -3,6 +3,7 @@ set -e
 
 # Start YouTube WebSocket service in background with auto-restart
 (
+  set +e
   while true; do
     cd /app/youtube-websocket
     bun run src/index.ts
