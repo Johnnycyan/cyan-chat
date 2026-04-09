@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o chat .
 # ---- Stage 3: Build YouTube WebSocket service ----
 FROM oven/bun:latest AS yt-build
 WORKDIR /build
-COPY youtube-websocket/package.json youtube-websocket/bun.lockb ./
+COPY youtube-websocket/package.json youtube-websocket/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY youtube-websocket/src/ ./src/
 COPY youtube-websocket/tsconfig.json ./
