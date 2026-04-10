@@ -18,7 +18,7 @@ if (Chat.info.yt) {
 			console.log('YouTube: Channel not live, retrying in 60s');
 			yt_socket.reconnectInterval = 60000;
 		} else {
-			console.log('YouTube: Disconnected');
+			console.log('YouTube: Disconnected: ', event.reason);
 		}
 	};
 
