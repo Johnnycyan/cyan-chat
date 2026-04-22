@@ -2406,7 +2406,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2431,7 +2431,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2453,7 +2453,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2475,7 +2475,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2506,7 +2506,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2568,7 +2568,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2632,7 +2632,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2656,7 +2656,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
@@ -2830,7 +2830,7 @@ Chat = {
                 var flag = false;
                 message.tags.badges.split(",").forEach((badge) => {
                   badge = badge.split("/");
-                  if (badge[0] === "moderator" || badge[0] === "broadcaster") {
+                  if (badge[0] === "moderator" || badge[0] === "lead_moderator" || badge[0] === "broadcaster") {
                     flag = true;
                     return;
                   }
