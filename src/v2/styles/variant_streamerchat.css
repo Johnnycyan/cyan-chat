@@ -1,0 +1,579 @@
+/* Streamer Chat Mode — OBS dock layout with fixed input bar */
+
+/* Font for the bars is set in each font_*.css file alongside #chat_container.
+   Browsers reset font-family for form controls, so we still need this override: */
+body.streamerchat button,
+body.streamerchat input,
+body.streamerchat select {
+  font-family: inherit;
+}
+
+body.streamerchat {
+  background: #18181b;
+  overflow: hidden;
+}
+
+/* Push chat up to make room for the fixed bottom bar */
+#chat_container {
+  background-color: #242427;
+  padding: 8px 12px;
+  width: 100%;
+  /* Bottom padding = auth bar (36px) + streamer bar (60px) + gap */
+  padding-bottom: 2.5em;
+}
+
+.chat_line {
+  padding: 4px 8px;
+  border-bottom: 1px solid #383838;
+  line-height: 1.5em;
+  position: relative;
+}
+
+.chat_line:last-child {
+  border-bottom: none;
+}
+
+/* ---------- Highlight variants ---------- */
+.chat_line.highlighted-message {
+  background-color: rgba(117, 94, 188, 0.4);
+}
+.chat_line.mention-highlight {
+  background-color: color-mix(
+    in srgb,
+    var(--mention-color, #ffff00) 15%,
+    transparent
+  );
+}
+.chat_line.channel-point-redeem {
+  background-color: rgba(0, 170, 255, 0.08);
+}
+.chat_line.gigantified-emote {
+  background-color: rgba(145, 70, 255, 0.08);
+}
+
+/* ---------- Mod action buttons (per message) ---------- */
+.mod-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.chat_line:hover .mod-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mod-btn {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #3a3a44;
+  color: #efeff1;
+  transition: background 0.1s;
+}
+
+.mod-btn:hover {
+  background: #53535e;
+}
+
+.mod-btn.mod-btn--delete {
+  background: #5c2020;
+  color: #f7baba;
+}
+.mod-btn.mod-btn--delete:hover {
+  background: #7a2424;
+}
+.mod-btn.mod-btn--timeout {
+  background: #3d3220;
+  color: #f0d49c;
+}
+.mod-btn.mod-btn--timeout:hover {
+  background: #55421d;
+}
+.mod-btn.mod-btn--ban {
+  background: #1a1a4a;
+  color: #9db3f7;
+}
+.mod-btn.mod-btn--ban:hover {
+  background: #252560;
+}
+
+/* ---------- Deleted / timed-out / banned messages ---------- */
+.chat_line--deleted {
+  opacity: 0.45;
+  text-decoration: line-through;
+  pointer-events: none;
+}
+
+.chat_line--deleted .mod-actions {
+  display: none;
+}
+
+.chat_line--deleted::before {
+  content: attr(data-deleted-label);
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #c43535;
+  background: rgba(196, 53, 53, 0.15);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-right: 6px;
+  text-decoration: none;
+  vertical-align: middle;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Auth bar (top) ---------- */
+#streamer_auth_bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: #18181b;
+  border-bottom: 1px solid #2f2f35;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  z-index: 100;
+  color: #efeff1;
+}
+
+#streamer_login_btn {
+  background: #9147ff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+#streamer_login_btn:hover {
+  background: #772ce8;
+}
+
+#streamer_user_info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+#streamer_username {
+  font-weight: 700;
+  color: #9147ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#streamer_settings_btn {
+  background: none;
+  border: none;
+  color: #adadb8;
+  cursor: pointer;
+  font-size: 1.75em;
+  border-radius: 100%;
+  margin-left: auto;
+}
+#streamer_settings_btn:hover {
+  background: #2f2f35;
+  color: #efeff1;
+}
+
+#streamer_auth_error {
+  color: #f44;
+  font-size: 11px;
+  display: none;
+}
+
+/* ---------- Chat input bar (bottom) ---------- */
+#streamer_bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #18181b;
+  border-top: 1px solid #2f2f35;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  z-index: 100;
+}
+
+#chat_input {
+  flex: 1;
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 5px;
+  color: #efeff1;
+  font-size: inherit;
+  padding: 7px 10px;
+  outline: none;
+  resize: none;
+  height: 36px;
+  line-height: 1.4;
+}
+#chat_input::placeholder {
+  color: #5f5f6e;
+}
+#chat_input:focus {
+  border-color: #9147ff;
+}
+
+#chat_send_btn {
+  background: #9147ff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 14px;
+  font-weight: 700;
+  font-size: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  height: 36px;
+}
+#chat_send_btn:hover {
+  background: #772ce8;
+}
+#chat_send_btn:disabled {
+  background: #3a3a44;
+  cursor: default;
+  color: #adadb8;
+}
+
+/* ---------- Slash command autocomplete ---------- */
+#command_autocomplete {
+  position: fixed;
+  bottom: 64px;
+  left: 8px;
+  right: 8px;
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 200;
+  display: none;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: inherit;
+  color: #efeff1;
+  border-bottom: 1px solid #26262c;
+}
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: #2f2f35;
+}
+
+.autocomplete-cmd {
+  font-weight: 700;
+  color: #9147ff;
+}
+.autocomplete-desc {
+  color: #adadb8;
+}
+
+/* ---------- Modal overlay ---------- */
+.sc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sc-modal {
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 8px;
+  padding: 20px;
+  width: min(340px, 94vw);
+  color: #efeff1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sc-modal h2 {
+  margin: 0;
+  font-size: 1.15em;
+  color: #efeff1;
+  font-weight: 700;
+}
+
+.sc-modal label {
+  display: block;
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #adadb8;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.sc-modal input[type="text"],
+.sc-modal input[type="number"] {
+  width: 100%;
+  background: #0e0e10;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+  color: #efeff1;
+  font-size: 1em;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  outline: none;
+}
+.sc-modal input:focus {
+  border-color: #9147ff;
+}
+
+.sc-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.sc-btn {
+  border: none;
+  border-radius: 5px;
+  padding: 7px 16px;
+  font-size: 1em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sc-btn--primary {
+  background: #9147ff;
+  color: #fff;
+}
+.sc-btn--primary:hover {
+  background: #772ce8;
+}
+.sc-btn--secondary {
+  background: #3a3a44;
+  color: #efeff1;
+}
+.sc-btn--secondary:hover {
+  background: #53535e;
+}
+
+.sc-choices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sc-choice-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sc-choice-row input {
+  flex: 1;
+}
+.sc-remove-btn {
+  background: #5c2020;
+  color: #f7baba;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+.sc-remove-btn:hover {
+  background: #7a2424;
+}
+
+.sc-add-btn {
+  background: #3a3a44;
+  color: #efeff1;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.9em;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.sc-add-btn:hover {
+  background: #53535e;
+}
+
+.sc-feedback {
+  font-size: 0.9em;
+  padding: 5px 8px;
+  border-radius: 4px;
+  display: none;
+}
+.sc-feedback.success {
+  background: rgba(0, 200, 100, 0.12);
+  color: #2dba6e;
+}
+.sc-feedback.error {
+  background: rgba(196, 53, 53, 0.12);
+  color: #f44;
+}
+
+/* ---------- Mod settings panel ---------- */
+#mod_settings_panel {
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 8px;
+  padding: 16px;
+  width: min(340px, 94vw);
+  color: #efeff1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+#mod_settings_panel h2 {
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+.mod-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #0e0e10;
+  border-radius: 5px;
+  border: 1px solid #2f2f35;
+}
+
+.mod-action-row .row-label {
+  flex: 1;
+  font-size: 0.9em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-row-btn {
+  background: #3a3a44;
+  color: #efeff1;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+.mod-row-btn:hover {
+  background: #53535e;
+}
+.mod-row-btn.danger {
+  background: #5c2020;
+  color: #f7baba;
+}
+.mod-row-btn.danger:hover {
+  background: #7a2424;
+}
+
+.sc-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sc-toggle {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #3a3a44;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.sc-toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #efeff1;
+  transition: left 0.15s;
+}
+.sc-toggle:checked {
+  background: #9147ff;
+}
+.sc-toggle:checked::after {
+  left: 19px;
+}
+
+.sc-add-action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #0e0e10;
+  border-radius: 6px;
+  border: 1px solid #2f2f35;
+}
+
+.sc-add-action-form select {
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+  color: #efeff1;
+  font-size: 1em;
+  padding: 5px 8px;
+  outline: none;
+}
+.sc-add-action-form select:focus {
+  border-color: #9147ff;
+}
+.sc-add-action-form input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+  color: #efeff1;
+  font-size: 1em;
+  padding: 5px 8px;
+  outline: none;
+}
+.sc-add-action-form input:focus {
+  border-color: #9147ff;
+}

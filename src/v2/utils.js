@@ -50,13 +50,13 @@ const toTitleCase = (phrase) => {
 };
 
 function loadCustomFont(name) {
-  const $chat_container = $("#chat_container");
   const fontName = toTitleCase(name);
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = `https://fonts.googleapis.com/css?family=${fontName}`;
   document.head.appendChild(link);
-  $chat_container.css("font-family", fontName);
+  $("#chat_container, #streamer_auth_bar, #streamer_bar, #command_autocomplete, .sc-modal-overlay, #mod_settings_panel")
+    .css("font-family", fontName);
 }
 
 function escapeRegExp(string) {

@@ -58,7 +58,7 @@ type SharedChatEvent struct {
 	SessionID    string                  `json:"session_id,omitempty"`
 	HostID       string                  `json:"host_id,omitempty"`
 	HostLogin    string                  `json:"host_login,omitempty"`
-	Participants []SharedChatParticipant  `json:"participants,omitempty"`
+	Participants []SharedChatParticipant `json:"participants,omitempty"`
 	RewardTitle  string                  `json:"reward_title,omitempty"`
 	RewardID     string                  `json:"reward_id,omitempty"`
 	RewardCost   int                     `json:"reward_cost,omitempty"`
@@ -398,6 +398,914 @@ func synthesizeSpeechHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to write audio data", http.StatusInternalServerError)
 		return
+	}
+}
+
+// ============================================================
+// Streamer Chat API Handlers
+// ============================================================
+
+// streamerUserToken extracts the Bearer token from the Authorization header.
+func streamerUserToken(r *http.Request) (string, bool) {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return "", false
+	}
+	return strings.TrimPrefix(auth, "Bearer "), true
+}
+
+// streamerProxyRequest sends a request to the Twitch Helix API using the
+// caller-supplied user token (not the server app token).
+func streamerProxyRequest(method, helixPath string, userToken string, body io.Reader, contentType string) (int, []byte, error) {
+	req, err := http.NewRequest(method, "https://api.twitch.tv/helix"+helixPath, body)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	req.Header.Set("Client-Id", clientID)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	return resp.StatusCode, b, err
+}
+
+// handleStreamerClientID returns the Twitch client ID to the browser
+// so it can construct the PKCE OAuth URL without the client_secret.
+// GET /api/streamer/client_id
+func handleStreamerClientID(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"client_id": clientID})
+}
+
+// handleStreamerToken exchanges a PKCE auth code for user tokens.
+// POST /api/streamer/token  body: { code, code_verifier, redirect_uri }
+func handleStreamerToken(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Code         string `json:"code"`
+		CodeVerifier string `json:"code_verifier"`
+		RedirectURI  string `json:"redirect_uri"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	if req.Code == "" || req.CodeVerifier == "" || req.RedirectURI == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("code", req.Code)
+	form.Set("code_verifier", req.CodeVerifier)
+	form.Set("grant_type", "authorization_code")
+	form.Set("redirect_uri", req.RedirectURI)
+	resp, err := http.PostForm("https://id.twitch.tv/oauth2/token", form)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(body)
+}
+
+// handleStreamerRefresh refreshes a user token.
+// POST /api/streamer/refresh  body: { refresh_token }
+func handleStreamerRefresh(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", req.RefreshToken)
+	resp, err := http.PostForm("https://id.twitch.tv/oauth2/token", form)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(body)
+}
+
+// handleStreamerCheckMod validates the user token and returns mod/broadcaster status.
+// GET /api/streamer/check-mod?broadcaster_id=<id>
+func handleStreamerCheckMod(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	broadcasterID := r.URL.Query().Get("broadcaster_id")
+	if broadcasterID == "" {
+		http.Error(w, "Missing broadcaster_id", http.StatusBadRequest)
+		return
+	}
+
+	// Validate token and get user identity
+	validateReq, _ := http.NewRequest("GET", "https://id.twitch.tv/oauth2/validate", nil)
+	validateReq.Header.Set("Authorization", "Bearer "+userToken)
+	valResp, err := (&http.Client{}).Do(validateReq)
+	if err != nil || valResp.StatusCode != http.StatusOK {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+	defer valResp.Body.Close()
+	var valData struct {
+		UserID string `json:"user_id"`
+		Login  string `json:"login"`
+	}
+	json.NewDecoder(valResp.Body).Decode(&valData)
+
+	isBroadcaster := valData.UserID == broadcasterID
+
+	isMod := false
+	if !isBroadcaster {
+		// Use /moderation/channels (scope: user:read:moderated_channels) — this works
+		// with the logged-in moderator's own token, unlike /moderation/moderators which
+		// requires the broadcaster's token.
+		status, body, err := streamerProxyRequest("GET",
+			fmt.Sprintf("/moderation/channels?user_id=%s", valData.UserID),
+			userToken, nil, "")
+		if err == nil && status == http.StatusOK {
+			var modData struct {
+				Data []struct {
+					BroadcasterID string `json:"broadcaster_id"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(body, &modData) == nil {
+				for _, ch := range modData.Data {
+					if ch.BroadcasterID == broadcasterID {
+						isMod = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Fetch display_name from /helix/users — validate only returns the lowercase login.
+	displayName := valData.Login
+	status, body, err := streamerProxyRequest("GET",
+		fmt.Sprintf("/users?id=%s", valData.UserID),
+		userToken, nil, "")
+	if err == nil && status == http.StatusOK {
+		var usersData struct {
+			Data []struct {
+				DisplayName string `json:"display_name"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(body, &usersData) == nil && len(usersData.Data) > 0 {
+			displayName = usersData.Data[0].DisplayName
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"user_id":        valData.UserID,
+		"login":          valData.Login,
+		"display_name":   displayName,
+		"is_broadcaster": isBroadcaster,
+		"is_mod":         isMod || isBroadcaster,
+	})
+}
+
+// handleStreamerMessages handles sending (POST) and deleting (DELETE) chat messages.
+// POST  /api/streamer/messages  body: { broadcaster_id, sender_id, message }
+// DELETE /api/streamer/messages?broadcaster_id=&moderator_id=&message_id=
+func handleStreamerMessages(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		w.Header().Set("Content-Type", "application/json")
+		var req struct {
+			BroadcasterID string `json:"broadcaster_id"`
+			SenderID      string `json:"sender_id"`
+			Message       string `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.SenderID == "" || req.Message == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		payload, _ := json.Marshal(map[string]string{
+			"broadcaster_id": req.BroadcasterID,
+			"sender_id":      req.SenderID,
+			"message":        req.Message,
+		})
+		status, body, err := streamerProxyRequest("POST", "/chat/messages", userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	case http.MethodDelete:
+		q := r.URL.Query()
+		broadcasterID := q.Get("broadcaster_id")
+		moderatorID := q.Get("moderator_id")
+		messageID := q.Get("message_id")
+		if broadcasterID == "" || moderatorID == "" || messageID == "" {
+			http.Error(w, "Missing query params", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/moderation/chat?broadcaster_id=%s&moderator_id=%s&message_id=%s",
+			url.QueryEscape(broadcasterID), url.QueryEscape(moderatorID), url.QueryEscape(messageID))
+		status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerBans handles banning/timing out (POST) and unbanning (DELETE) users.
+// POST   /api/streamer/bans  body: { broadcaster_id, moderator_id, user_id, duration, reason }
+// DELETE /api/streamer/bans?broadcaster_id=&moderator_id=&user_id=
+func handleStreamerBans(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		w.Header().Set("Content-Type", "application/json")
+		var req struct {
+			BroadcasterID string `json:"broadcaster_id"`
+			ModeratorID   string `json:"moderator_id"`
+			UserID        string `json:"user_id"`
+			Duration      int    `json:"duration"`
+			Reason        string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.ModeratorID == "" || req.UserID == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		banData := map[string]interface{}{
+			"user_id": req.UserID,
+			"reason":  req.Reason,
+		}
+		if req.Duration > 0 {
+			banData["duration"] = req.Duration
+		}
+		payload, _ := json.Marshal(map[string]interface{}{"data": banData})
+		path := fmt.Sprintf("/moderation/bans?broadcaster_id=%s&moderator_id=%s",
+			url.QueryEscape(req.BroadcasterID), url.QueryEscape(req.ModeratorID))
+		status, body, err := streamerProxyRequest("POST", path, userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	case http.MethodDelete:
+		q := r.URL.Query()
+		broadcasterID := q.Get("broadcaster_id")
+		moderatorID := q.Get("moderator_id")
+		userID := q.Get("user_id")
+		if broadcasterID == "" || moderatorID == "" || userID == "" {
+			http.Error(w, "Missing query params", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/moderation/bans?broadcaster_id=%s&moderator_id=%s&user_id=%s",
+			url.QueryEscape(broadcasterID), url.QueryEscape(moderatorID), url.QueryEscape(userID))
+		status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerPolls handles creating (POST) and ending (PATCH) polls.
+// POST  /api/streamer/polls  body: { broadcaster_id, title, choices, duration }
+// PATCH /api/streamer/polls  body: { broadcaster_id, id, status }
+func handleStreamerPolls(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			BroadcasterID string   `json:"broadcaster_id"`
+			Title         string   `json:"title"`
+			Choices       []string `json:"choices"`
+			Duration      int      `json:"duration"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.Title == "" || len(req.Choices) < 2 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		type pollChoice struct {
+			Title string `json:"title"`
+		}
+		choices := make([]pollChoice, len(req.Choices))
+		for i, c := range req.Choices {
+			choices[i] = pollChoice{Title: c}
+		}
+		if req.Duration == 0 {
+			req.Duration = 60
+		}
+		payload, _ := json.Marshal(map[string]interface{}{
+			"broadcaster_id":                req.BroadcasterID,
+			"title":                         req.Title,
+			"choices":                       choices,
+			"duration":                      req.Duration,
+			"channel_points_voting_enabled": false,
+		})
+		status, body, err := streamerProxyRequest("POST", "/polls", userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	case http.MethodPatch:
+		var req struct {
+			BroadcasterID string `json:"broadcaster_id"`
+			ID            string `json:"id"`
+			Status        string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.ID == "" || req.Status == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		payload, _ := json.Marshal(map[string]string{
+			"broadcaster_id": req.BroadcasterID,
+			"id":             req.ID,
+			"status":         req.Status,
+		})
+		status, body, err := streamerProxyRequest("PATCH", "/polls", userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerPredictions handles creating (POST) and resolving/cancelling (PATCH) predictions.
+// POST  /api/streamer/predictions  body: { broadcaster_id, title, outcomes, prediction_window }
+// PATCH /api/streamer/predictions  body: { broadcaster_id, id, status, winning_outcome_id? }
+func handleStreamerPredictions(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			BroadcasterID    string   `json:"broadcaster_id"`
+			Title            string   `json:"title"`
+			Outcomes         []string `json:"outcomes"`
+			PredictionWindow int      `json:"prediction_window"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.Title == "" || len(req.Outcomes) < 2 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		type outcomeChoice struct {
+			Title string `json:"title"`
+		}
+		outcomes := make([]outcomeChoice, len(req.Outcomes))
+		for i, o := range req.Outcomes {
+			outcomes[i] = outcomeChoice{Title: o}
+		}
+		if req.PredictionWindow == 0 {
+			req.PredictionWindow = 120
+		}
+		payload, _ := json.Marshal(map[string]interface{}{
+			"broadcaster_id":    req.BroadcasterID,
+			"title":             req.Title,
+			"outcomes":          outcomes,
+			"prediction_window": req.PredictionWindow,
+		})
+		status, body, err := streamerProxyRequest("POST", "/predictions", userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	case http.MethodPatch:
+		var req struct {
+			BroadcasterID    string `json:"broadcaster_id"`
+			ID               string `json:"id"`
+			Status           string `json:"status"`
+			WinningOutcomeID string `json:"winning_outcome_id,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.ID == "" || req.Status == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		patchData := map[string]string{
+			"broadcaster_id": req.BroadcasterID,
+			"id":             req.ID,
+			"status":         req.Status,
+		}
+		if req.WinningOutcomeID != "" {
+			patchData["winning_outcome_id"] = req.WinningOutcomeID
+		}
+		payload, _ := json.Marshal(patchData)
+		status, body, err := streamerProxyRequest("PATCH", "/predictions", userToken, bytes.NewReader(payload), "application/json")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write(body)
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerAnnounce sends a channel announcement.
+// POST /api/streamer/announce  body: { broadcaster_id, moderator_id, message, color? }
+func handleStreamerAnnounce(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		BroadcasterID string `json:"broadcaster_id"`
+		ModeratorID   string `json:"moderator_id"`
+		Message       string `json:"message"`
+		Color         string `json:"color"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.Message == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	color := req.Color
+	if color == "" {
+		color = "primary"
+	}
+	payload, _ := json.Marshal(map[string]string{"message": req.Message, "color": color})
+	path := fmt.Sprintf("/chat/announcements?broadcaster_id=%s&moderator_id=%s",
+		url.QueryEscape(req.BroadcasterID), url.QueryEscape(req.ModeratorID))
+	status, body, err := streamerProxyRequest("POST", path, userToken, bytes.NewReader(payload), "application/json")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(body) > 0 {
+		w.Write(body)
+	}
+}
+
+// handleStreamerChatSettings patches chat settings (slow mode, sub-only, emote-only, etc.).
+// PATCH /api/streamer/chat-settings  body: { broadcaster_id, moderator_id, <setting fields> }
+func handleStreamerChatSettings(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var raw map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	broadcasterID, _ := raw["broadcaster_id"].(string)
+	moderatorID, _ := raw["moderator_id"].(string)
+	if broadcasterID == "" {
+		http.Error(w, "Missing broadcaster_id", http.StatusBadRequest)
+		return
+	}
+	delete(raw, "broadcaster_id")
+	delete(raw, "moderator_id")
+	payload, _ := json.Marshal(raw)
+	path := fmt.Sprintf("/chat/settings?broadcaster_id=%s&moderator_id=%s",
+		url.QueryEscape(broadcasterID), url.QueryEscape(moderatorID))
+	status, body, err := streamerProxyRequest("PATCH", path, userToken, bytes.NewReader(payload), "application/json")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(body) > 0 {
+		w.Write(body)
+	}
+}
+
+// handleStreamerChatClear clears all messages in chat.
+// DELETE /api/streamer/chat-clear?broadcaster_id=&moderator_id=
+func handleStreamerChatClear(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	q := r.URL.Query()
+	broadcasterID := q.Get("broadcaster_id")
+	moderatorID := q.Get("moderator_id")
+	if broadcasterID == "" || moderatorID == "" {
+		http.Error(w, "Missing query params", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/moderation/chat?broadcaster_id=%s&moderator_id=%s",
+		url.QueryEscape(broadcasterID), url.QueryEscape(moderatorID))
+	status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(body) > 0 {
+		w.Write(body)
+	}
+}
+
+// handleStreamerColor changes the user's chat name color.
+// PUT /api/streamer/color  body: { user_id, color }
+func handleStreamerColor(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		UserID string `json:"user_id"`
+		Color  string `json:"color"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" || req.Color == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	path := fmt.Sprintf("/chat/color?user_id=%s&color=%s",
+		url.QueryEscape(req.UserID), url.QueryEscape(req.Color))
+	status, body, err := streamerProxyRequest("PUT", path, userToken, nil, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(body) > 0 {
+		w.Write(body)
+	}
+}
+
+// handleStreamerRaids starts (POST) or cancels (DELETE) a raid.
+// POST   /api/streamer/raids  body: { from_broadcaster_id, to_broadcaster_id }
+// DELETE /api/streamer/raids?broadcaster_id=
+func handleStreamerRaids(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			FromBroadcasterID string `json:"from_broadcaster_id"`
+			ToBroadcasterID   string `json:"to_broadcaster_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FromBroadcasterID == "" || req.ToBroadcasterID == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/raids?from_broadcaster_id=%s&to_broadcaster_id=%s",
+			url.QueryEscape(req.FromBroadcasterID), url.QueryEscape(req.ToBroadcasterID))
+		status, body, err := streamerProxyRequest("POST", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	case http.MethodDelete:
+		broadcasterID := r.URL.Query().Get("broadcaster_id")
+		if broadcasterID == "" {
+			http.Error(w, "Missing broadcaster_id", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/raids?broadcaster_id=%s", url.QueryEscape(broadcasterID))
+		status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerCommercial starts an ad break.
+// POST /api/streamer/commercial  body: { broadcaster_id, length }
+func handleStreamerCommercial(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		BroadcasterID string `json:"broadcaster_id"`
+		Length        int    `json:"length"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	if req.Length <= 0 {
+		req.Length = 30
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"broadcaster_id": req.BroadcasterID,
+		"length":         req.Length,
+	})
+	status, body, err := streamerProxyRequest("POST", "/channels/commercial", userToken, bytes.NewReader(payload), "application/json")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(body) > 0 {
+		w.Write(body)
+	}
+}
+
+// handleStreamerMarkers creates a stream marker.
+// POST /api/streamer/markers  body: { user_id, description? }
+func handleStreamerMarkers(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		UserID      string `json:"user_id"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	body := map[string]string{"user_id": req.UserID}
+	if req.Description != "" {
+		body["description"] = req.Description
+	}
+	payload, _ := json.Marshal(body)
+	status, respBody, err := streamerProxyRequest("POST", "/streams/markers", userToken, bytes.NewReader(payload), "application/json")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if len(respBody) > 0 {
+		w.Write(respBody)
+	}
+}
+
+// handleStreamerMods adds (POST) or removes (DELETE) a channel moderator.
+// POST   /api/streamer/mods  body: { broadcaster_id, user_id }
+// DELETE /api/streamer/mods?broadcaster_id=&user_id=
+func handleStreamerMods(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			BroadcasterID string `json:"broadcaster_id"`
+			UserID        string `json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.UserID == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/moderation/moderators?broadcaster_id=%s&user_id=%s",
+			url.QueryEscape(req.BroadcasterID), url.QueryEscape(req.UserID))
+		status, body, err := streamerProxyRequest("POST", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	case http.MethodDelete:
+		q := r.URL.Query()
+		path := fmt.Sprintf("/moderation/moderators?broadcaster_id=%s&user_id=%s",
+			url.QueryEscape(q.Get("broadcaster_id")), url.QueryEscape(q.Get("user_id")))
+		status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStreamerVips adds (POST) or removes (DELETE) a channel VIP.
+// POST   /api/streamer/vips  body: { broadcaster_id, user_id }
+// DELETE /api/streamer/vips?broadcaster_id=&user_id=
+func handleStreamerVips(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			BroadcasterID string `json:"broadcaster_id"`
+			UserID        string `json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BroadcasterID == "" || req.UserID == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		path := fmt.Sprintf("/channels/vips?broadcaster_id=%s&user_id=%s",
+			url.QueryEscape(req.BroadcasterID), url.QueryEscape(req.UserID))
+		status, body, err := streamerProxyRequest("POST", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	case http.MethodDelete:
+		q := r.URL.Query()
+		path := fmt.Sprintf("/channels/vips?broadcaster_id=%s&user_id=%s",
+			url.QueryEscape(q.Get("broadcaster_id")), url.QueryEscape(q.Get("user_id")))
+		status, body, err := streamerProxyRequest("DELETE", path, userToken, nil, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(status)
+		if len(body) > 0 {
+			w.Write(body)
+		}
+	default:
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -1365,11 +2273,11 @@ func handleEventSubNotification(esc *EventSubChannel, payload json.RawMessage) {
 	log.Printf("[TEMP DEBUG][SharedChat] Received event: %s for channel %s", notif.Subscription.Type, esc.ChannelID)
 
 	var eventData struct {
-		SessionID               string                `json:"session_id"`
-		BroadcasterUserID       string                `json:"broadcaster_user_id"`
-		BroadcasterUserLogin    string                `json:"broadcaster_user_login"`
-		HostBroadcasterUserID   string                `json:"host_broadcaster_user_id"`
-		HostBroadcasterUserLogin string               `json:"host_broadcaster_user_login"`
+		SessionID                string                  `json:"session_id"`
+		BroadcasterUserID        string                  `json:"broadcaster_user_id"`
+		BroadcasterUserLogin     string                  `json:"broadcaster_user_login"`
+		HostBroadcasterUserID    string                  `json:"host_broadcaster_user_id"`
+		HostBroadcasterUserLogin string                  `json:"host_broadcaster_user_login"`
 		Participants             []SharedChatParticipant `json:"participants"`
 	}
 	if err := json.Unmarshal(notif.Event, &eventData); err != nil {
@@ -1671,7 +2579,7 @@ func stopEventSubForChannel(channelID string) {
 // ============================================================
 
 var (
-	ytColors     map[string]string
+	ytColors      map[string]string
 	ytColorsMutex sync.RWMutex
 )
 
@@ -1887,6 +2795,23 @@ func main() {
 	http.HandleFunc("/api/yt-colors", handleYTColors)
 	http.HandleFunc("/admin/yt-colors", handleAdminYTColors)
 	http.HandleFunc("/api/admin/yt-colors", handleAdminYTColorsAPI)
+	http.HandleFunc("/api/streamer/client_id", handleStreamerClientID)
+	http.HandleFunc("/api/streamer/token", handleStreamerToken)
+	http.HandleFunc("/api/streamer/refresh", handleStreamerRefresh)
+	http.HandleFunc("/api/streamer/check-mod", handleStreamerCheckMod)
+	http.HandleFunc("/api/streamer/messages", handleStreamerMessages)
+	http.HandleFunc("/api/streamer/bans", handleStreamerBans)
+	http.HandleFunc("/api/streamer/polls", handleStreamerPolls)
+	http.HandleFunc("/api/streamer/predictions", handleStreamerPredictions)
+	http.HandleFunc("/api/streamer/announce", handleStreamerAnnounce)
+	http.HandleFunc("/api/streamer/chat-settings", handleStreamerChatSettings)
+	http.HandleFunc("/api/streamer/chat-clear", handleStreamerChatClear)
+	http.HandleFunc("/api/streamer/color", handleStreamerColor)
+	http.HandleFunc("/api/streamer/raids", handleStreamerRaids)
+	http.HandleFunc("/api/streamer/commercial", handleStreamerCommercial)
+	http.HandleFunc("/api/streamer/markers", handleStreamerMarkers)
+	http.HandleFunc("/api/streamer/mods", handleStreamerMods)
+	http.HandleFunc("/api/streamer/vips", handleStreamerVips)
 	// serve the current directory as a static web server
 	staticFilesV2 := http.FileServer(http.Dir("./dist"))
 	http.Handle("/", staticFilesV2)

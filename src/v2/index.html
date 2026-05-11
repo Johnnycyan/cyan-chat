@@ -1,33 +1,148 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>Cyan Chat &bull;&nbsp;</title>
-        <link rel="stylesheet" href="styles/style.css">
-        <!-- favicon -->
-        <link rel="icon" type="image/webp" href="../img/CyanChat128.webp">
-        <link rel="preconnect" href="https://fonts.gstatic.com">
-        <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Indie+Flower&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Noto+Sans+JP:wght@100;300;400;500;700;900&family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&family=Source+Code+Pro:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,900;1,200;1,300;1,400;1,500;1,600;1,700;1,900&family=Press+Start+2P&family=Wallpoet&display=swap"
-              rel="stylesheet">
-        <script src="jquery.min.js"></script>
-        <script src="irc-message.js"></script>
-        <script src="reconnecting-websocket.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js"
-                crossorigin="anonymous"></script>
-        <script src="tinycolor.js"></script>
-        <!-- <script src="credentials.js?v=1721346623"></script> -->
-        <script src="settings.js"></script>
-        <script src="utils.js"></script>
-        <script src="sevenAPI.js"></script>
-        <script src="sevenWS.js"></script>
-        <script src="syncEmotes.js"></script>
-        <script src="script.js"></script>
-        <!-- youtube custom code -->
-        <script src="youtube.js"></script>
-    </head>
-    <body>
-        <div id="info_container">
-            <span id="info_text">Test Text</span>
+
+<head>
+    <title>Cyan Chat &bull;&nbsp;</title>
+    <link rel="stylesheet" href="styles/style.css">
+    <!-- favicon -->
+    <link rel="icon" type="image/webp" href="../img/CyanChat128.webp">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Indie+Flower&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Noto+Sans+JP:wght@100;300;400;500;700;900&family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&family=Source+Code+Pro:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,900;1,200;1,300;1,400;1,500;1,600;1,700;1,900&family=Press+Start+2P&family=Wallpoet&display=swap"
+        rel="stylesheet">
+    <script src="jquery.min.js"></script>
+    <script src="irc-message.js"></script>
+    <script src="reconnecting-websocket.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
+    <script src="tinycolor.js"></script>
+    <!-- <script src="credentials.js?v=1721346623"></script> -->
+    <script src="settings.js"></script>
+    <script src="utils.js"></script>
+    <script src="sevenAPI.js"></script>
+    <script src="sevenWS.js"></script>
+    <script src="syncEmotes.js"></script>
+    <script src="script.js"></script>
+    <!-- youtube custom code -->
+    <script src="youtube.js"></script>
+    <!-- streamer chat mode -->
+    <script src="streamerChat.js"></script>
+</head>
+
+<body>
+    <div id="info_container">
+        <span id="info_text">Test Text</span>
+    </div>
+    <div id="chat_container"></div>
+
+    <!-- Streamer Chat: auth bar (top) -->
+    <div id="streamer_auth_bar" style="display:none">
+        <button id="streamer_login_btn">Login with Twitch</button>
+        <div id="streamer_user_info" style="display:none">
+            <span id="streamer_username"></span>
         </div>
-        <div id="chat_container"></div>
-    </body>
+        <span id="streamer_auth_error"></span>
+        <button id="streamer_settings_btn" title="Mod settings">&#9881;</button>
+    </div>
+
+    <!-- Streamer Chat: fixed chat input bar (bottom) -->
+    <div id="streamer_bar" style="display:none">
+        <div id="command_autocomplete"></div>
+        <input id="chat_input" type="text" placeholder="Send a message…" autocomplete="off" maxlength="500" />
+        <button id="chat_send_btn">Send</button>
+    </div>
+
+    <!-- Streamer Chat: poll modal -->
+    <div id="poll_modal" class="sc-modal-overlay" style="display:none">
+        <div class="sc-modal">
+            <h2>Create Poll</h2>
+            <div>
+                <label>Title</label>
+                <input type="text" id="poll_title" placeholder="Poll question…" maxlength="60" />
+            </div>
+            <div>
+                <label>Choices</label>
+                <div class="sc-choices-list" id="poll_choices">
+                    <div class="sc-choice-row"><input type="text" placeholder="Choice 1" maxlength="25" /><button
+                            class="sc-remove-btn" title="Remove">&#10005;</button></div>
+                    <div class="sc-choice-row"><input type="text" placeholder="Choice 2" maxlength="25" /><button
+                            class="sc-remove-btn" title="Remove">&#10005;</button></div>
+                </div>
+                <button class="sc-add-btn" id="poll_add_choice">+ Add Choice</button>
+            </div>
+            <div>
+                <label>Duration (seconds)</label>
+                <input type="number" id="poll_duration" value="60" min="15" max="1800" />
+            </div>
+            <div class="sc-feedback" id="poll_feedback"></div>
+            <div class="sc-modal-actions">
+                <button class="sc-btn sc-btn--secondary" id="poll_cancel_btn">Cancel</button>
+                <button class="sc-btn sc-btn--primary" id="poll_submit_btn">Start Poll</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Streamer Chat: prediction modal -->
+    <div id="prediction_modal" class="sc-modal-overlay" style="display:none">
+        <div class="sc-modal">
+            <h2>Create Prediction</h2>
+            <div>
+                <label>Title</label>
+                <input type="text" id="prediction_title" placeholder="Prediction title…" maxlength="45" />
+            </div>
+            <div>
+                <label>Outcomes (2–10)</label>
+                <div class="sc-choices-list" id="prediction_outcomes">
+                    <div class="sc-choice-row"><input type="text" placeholder="Outcome 1" maxlength="25" /><button
+                            class="sc-remove-btn" title="Remove">&#10005;</button></div>
+                    <div class="sc-choice-row"><input type="text" placeholder="Outcome 2" maxlength="25" /><button
+                            class="sc-remove-btn" title="Remove">&#10005;</button></div>
+                </div>
+                <button class="sc-add-btn" id="prediction_add_outcome">+ Add Outcome</button>
+            </div>
+            <div>
+                <label>Prediction Window (seconds)</label>
+                <input type="number" id="prediction_window" value="120" min="30" max="1800" />
+            </div>
+            <div class="sc-feedback" id="prediction_feedback"></div>
+            <div class="sc-modal-actions">
+                <button class="sc-btn sc-btn--secondary" id="prediction_cancel_btn">Cancel</button>
+                <button class="sc-btn sc-btn--primary" id="prediction_submit_btn">Start Prediction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Streamer Chat: mod settings panel (shown as modal) -->
+    <div id="mod_settings_overlay" class="sc-modal-overlay" style="display:none">
+        <div id="mod_settings_panel">
+            <h2>Mod Settings</h2>
+            <div>
+                <label style="margin-bottom:8px;display:block">Mod Action Buttons</label>
+                <div id="mod_actions_list"></div>
+            </div>
+            <div class="sc-add-action-form" id="mod_add_form">
+                <label>Add Action</label>
+                <select id="mod_add_type">
+                    <option value="delete">Delete message</option>
+                    <option value="timeout">Timeout</option>
+                    <option value="ban">Ban</option>
+                    <option value="unban">Unban</option>
+                </select>
+                <input type="text" id="mod_add_label" placeholder="Button label (e.g. 10m)" maxlength="20" />
+                <input type="number" id="mod_add_duration" placeholder="Duration (sec, timeout only)" min="1"
+                    max="1209600" style="display:none" />
+                <button class="sc-btn sc-btn--secondary" id="mod_add_btn">Add</button>
+            </div>
+            <div class="sc-toggle-row">
+                <input type="checkbox" id="keep_deleted_toggle" class="sc-toggle" />
+                <label for="keep_deleted_toggle" style="text-transform:none;color:#efeff1;letter-spacing:0">Keep deleted
+                    messages visible (strikethrough)</label>
+            </div>
+            <div class="sc-modal-actions">
+                <button class="sc-btn sc-btn--secondary" id="mod_settings_close_btn">Close</button>
+                <button class="sc-btn sc-btn--primary" id="mod_settings_save_btn">Save</button>
+            </div>
+        </div>
+    </div>
+</body>
+
 </html>

@@ -164,6 +164,14 @@ Chat = {
       "normal_chat" in $.QueryString
         ? $.QueryString.normal_chat.toLowerCase() === "true"
         : false,
+    streamerChat:
+      "streamer_chat" in $.QueryString
+        ? $.QueryString.streamer_chat.toLowerCase() === "true"
+        : false,
+    streamerIsMod: false,
+    streamerUserId: null,
+    streamerLogin: null,
+    recentChatters: {},
     redeemNames: {},
     redeemQueue: [],
     ytColors: {},
@@ -953,6 +961,15 @@ Chat = {
         Chat.info.sms = false;
         appendCSS("variant", "normalchat");
         document.body.classList.add("normalchat");
+      }
+
+      if (Chat.info.streamerChat) {
+        Chat.info.center = false;
+        Chat.info.sms = false;
+        Chat.info.normalChat = false;
+        appendCSS("variant", "streamerchat");
+        document.body.classList.add("streamerchat");
+        if (typeof StreamerChat !== "undefined") StreamerChat.init();
       }
 
       appendCSS("size", size);
@@ -2229,6 +2246,13 @@ Chat = {
         $chatLine.addClass("highlighted-message");
       }
 
+      // Announcement (USERNOTICE msg-id=announcement)
+      if (info["msg-id"] === "announcement") {
+        $chatLine.addClass("announcement-message");
+        var announcementColor = (info["msg-param-color"] || "primary").toLowerCase();
+        $chatLine.addClass("announcement-" + announcementColor);
+      }
+
       // Gigantified emote Power-up
       if (Chat.info.showGigantifiedEmote && info["msg-id"] === "gigantified-emote-message") {
         $chatLine.addClass("gigantified-emote");
@@ -2254,6 +2278,14 @@ Chat = {
         }
       }
 
+      // Streamer mode: attach mod buttons + track recent chatters (must be before lines.push)
+      if (Chat.info.streamerChat && Chat.info.streamerIsMod && service !== "youtube") {
+        Chat.info.recentChatters[nick] = Date.now();
+        if (typeof StreamerChat !== "undefined") {
+          StreamerChat.renderModButtons($chatLine, nick, info.id, info["user-id"], service);
+        }
+      }
+
       Chat.info.lines.push($chatLine.wrap("<div>").parent().html());
       if (hasZeroWidth) {
         // console.log("DEBUG Message with mentions and emotes before fixZeroWidth:", $message.html());
@@ -2264,25 +2296,38 @@ Chat = {
     }
   },
 
+
   sanitizeUsername: function (username) {
     return username.replace(/\\s$/, '').trim();
   },
 
   clearChat: function (nick) {
     setTimeout(function () {
-      $('.chat_line[data-nick=' + nick + ']').remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markUserDeleted(nick, "timed out");
+      } else {
+        $('.chat_line[data-nick=' + nick + ']').remove();
+      }
     }, 200);
   },
 
   clearWholeChat: function () {
     setTimeout(function () {
-      $('.chat_line').remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markAllDeleted("cleared");
+      } else {
+        $('.chat_line').remove();
+      }
     }, 200);
   },
 
   clearMessage: function (id) {
     setTimeout(function () {
-      $(".chat_line[data-id=" + id + "]").remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markDeleted(id, "deleted");
+      } else {
+        $(".chat_line[data-id=" + id + "]").remove();
+      }
     }, 100);
   },
 
@@ -2980,6 +3025,14 @@ Chat = {
               }
 
               Chat.write(nick, message.tags, message.params[1], "twitch");
+              return;
+
+            case "USERNOTICE":
+              // Announcements are sent as USERNOTICE with msg-id=announcement.
+              if (message.tags && message.tags["msg-id"] === "announcement" && message.params[1]) {
+                var aNick = message.tags["login"] || (message.prefix ? message.prefix.split("!")[0] : "");
+                Chat.write(aNick, message.tags, message.params[1], "twitch");
+              }
               return;
           }
         });
