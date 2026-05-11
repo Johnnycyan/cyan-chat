@@ -273,6 +273,34 @@ body {
   border-radius: 4px;
 }
 
+/* Announcement (USERNOTICE msg-id=announcement) */
+.announcement-message {
+  border-left: 4px solid #9147ff;
+  padding-left: 8px;
+  border-radius: 4px;
+  background-color: rgba(145, 71, 255, 0.15);
+}
+.announcement-primary {
+  border-left-color: #9147ff;
+  background-color: rgba(145, 71, 255, 0.15);
+}
+.announcement-blue {
+  border-left-color: #1f69ff;
+  background-color: rgba(31, 105, 255, 0.15);
+}
+.announcement-green {
+  border-left-color: #00c800;
+  background-color: rgba(0, 200, 0, 0.15);
+}
+.announcement-orange {
+  border-left-color: #ff7621;
+  background-color: rgba(255, 118, 33, 0.15);
+}
+.announcement-purple {
+  border-left-color: #9900fe;
+  background-color: rgba(153, 0, 254, 0.15);
+}
+
 /* Channel Point Redeem */
 .channel-point-redeem {
   position: relative;

@@ -1,3 +1,9 @@
-#chat_container {
-    font-family: 'Wallpoet', cursive;
+#chat_container,
+#streamer_auth_bar,
+#streamer_bar,
+#command_autocomplete,
+.sc-modal-overlay,
+#mod_settings_panel,
+#sc-tooltip {
+  font-family: "Wallpoet", cursive;
 }

@@ -88,6 +88,7 @@ Chat = {
         : false,
     emotes: {},
     badges: {},
+    badgeNames: {},
     userBadges: {},
     specialBadges: {},
     ffzapBadges: null,
@@ -168,6 +169,14 @@ Chat = {
       "normal_chat" in $.QueryString
         ? $.QueryString.normal_chat.toLowerCase() === "true"
         : false,
+    streamerChat:
+      "streamer_chat" in $.QueryString
+        ? $.QueryString.streamer_chat.toLowerCase() === "true"
+        : false,
+    streamerIsMod: false,
+    streamerUserId: null,
+    streamerLogin: null,
+    recentChatters: {},
     redeemNames: {},
     redeemQueue: [],
     ytColors: {},
@@ -959,6 +968,15 @@ Chat = {
         document.body.classList.add("normalchat");
       }
 
+      if (Chat.info.streamerChat) {
+        Chat.info.center = false;
+        Chat.info.sms = false;
+        Chat.info.normalChat = false;
+        appendCSS("variant", "streamerchat");
+        document.body.classList.add("streamerchat");
+        if (typeof StreamerChat !== "undefined") StreamerChat.init();
+      }
+
       appendCSS("size", size);
       if (emoteScale > 1) {
         appendCSS("emoteScale_" + size, emoteScale);
@@ -1011,6 +1029,7 @@ Chat = {
           badge?.versions.forEach((version) => {
             Chat.info.badges[badge.set_id + ":" + version.id] =
               version.image_url_4x;
+            if (version.title) Chat.info.badgeNames[badge.set_id + ":" + version.id] = version.title;
           });
         });
 
@@ -1020,6 +1039,7 @@ Chat = {
               badge?.versions.forEach((version) => {
                 Chat.info.badges[badge.set_id + ":" + version.id] =
                   version.image_url_4x;
+                if (version.title) Chat.info.badgeNames[badge.set_id + ":" + version.id] = version.title;
               });
             });
 
@@ -1662,6 +1682,7 @@ Chat = {
             var $badge = $("<img/>");
             $badge.addClass("badge");
             $badge.attr("src", badge.url);
+            if (badge.description) $badge.attr("data-name", badge.description);
             $userInfo.append($badge);
           });
         }
@@ -1715,7 +1736,7 @@ Chat = {
                 });
               } else {
                 badges.push({
-                  description: badge[0],
+                  description: Chat.info.badgeNames[badge[0] + ":" + badge[1]] || badge[0],
                   url: Chat.getBadgeUrl(info, badge[0], badge[1]),
                   priority: priority,
                 });
@@ -1729,6 +1750,7 @@ Chat = {
             var $badge = $("<img/>");
             $badge.addClass("badge");
             $badge.attr("src", badge.url);
+            $badge.attr("data-name", badge.description);
             if (badge.description === "moderator") $modBadge = $badge;
             $userInfo.append($badge);
           }
@@ -1738,6 +1760,7 @@ Chat = {
             var $badge = $("<img/>");
             $badge.addClass("badge");
             $badge.attr("src", badge.url);
+            $badge.attr("data-name", badge.description);
             $userInfo.append($badge);
           }
         });
@@ -1751,6 +1774,7 @@ Chat = {
               $modBadge.remove();
             }
             $badge.attr("src", badge.url);
+            if (badge.description) $badge.attr("data-name", badge.description);
             $userInfo.append($badge);
           });
         }
@@ -1934,7 +1958,7 @@ Chat = {
               // console.log("[Emote Debug] Successfully extracted emote code:", emoteCode);
 
               replacements[emoteCode] =
-                '<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/' +
+                '<img class="emote" data-name="' + emoteCode + '" src="https://static-cdn.jtvnw.net/emoticons/v2/' +
                 twitchEmote[0] +
                 '/default/dark/3.0"/>';
             } catch (innerError) {
@@ -1960,11 +1984,11 @@ Chat = {
             if (word === emote[0]) {
               let replacement;
               if (emote[1].upscale) {
-                replacement = `<img class="emote upscale" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote upscale" data-name="${emote[0]}" src="${emote[1].image}"/>`;
               } else if (emote[1].zeroWidth) {
-                replacement = `<img class="emote" data-zw="true" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote" data-name="${emote[0]}" data-zw="true" src="${emote[1].image}"/>`;
               } else {
-                replacement = `<img class="emote" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote" data-name="${emote[0]}" src="${emote[1].image}"/>`;
               }
               replacedWord = replacement;
               isReplaced = true;
@@ -1979,11 +2003,11 @@ Chat = {
             if (word === emote[0]) {
               let replacement;
               if (emote[1].upscale) {
-                replacement = `<img class="emote upscale" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote upscale" data-name="${emote[0]}" src="${emote[1].image}"/>`;
               } else if (emote[1].zeroWidth) {
-                replacement = `<img class="emote" data-zw="true" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote" data-name="${emote[0]}" data-zw="true" src="${emote[1].image}"/>`;
               } else {
-                replacement = `<img class="emote" src="${emote[1].image}"/>`;
+                replacement = `<img class="emote" data-name="${emote[0]}" src="${emote[1].image}"/>`;
               }
               replacedWord = replacement;
               isReplaced = true;
@@ -2073,9 +2097,9 @@ Chat = {
                 const processedWords = words.map(word => {
                   if (ytMessageEmotes[word]) {
                     const emote = ytMessageEmotes[word];
-                    if (emote.upscale) return { word: `<img class="emote upscale" src="${emote.image}"/>`, isReplaced: true };
-                    if (emote.zeroWidth) return { word: `<img class="emote" data-zw="true" src="${emote.image}"/>`, isReplaced: true };
-                    return { word: `<img class="emote" src="${emote.image}"/>`, isReplaced: true };
+                    if (emote.upscale) return { word: `<img class="emote upscale" data-name="${word}" src="${emote.image}"/>`, isReplaced: true };
+                    if (emote.zeroWidth) return { word: `<img class="emote" data-name="${word}" data-zw="true" src="${emote.image}"/>`, isReplaced: true };
+                    return { word: `<img class="emote" data-name="${word}" src="${emote.image}"/>`, isReplaced: true };
                   }
                   return { word, isReplaced: false };
                 });
@@ -2233,6 +2257,13 @@ Chat = {
         $chatLine.addClass("highlighted-message");
       }
 
+      // Announcement (USERNOTICE msg-id=announcement)
+      if (info["msg-id"] === "announcement") {
+        $chatLine.addClass("announcement-message");
+        var announcementColor = (info["msg-param-color"] || "primary").toLowerCase();
+        $chatLine.addClass("announcement-" + announcementColor);
+      }
+
       // Gigantified emote Power-up
       if (Chat.info.showGigantifiedEmote && info["msg-id"] === "gigantified-emote-message") {
         $chatLine.addClass("gigantified-emote");
@@ -2258,6 +2289,14 @@ Chat = {
         }
       }
 
+      // Streamer mode: attach mod buttons + track recent chatters (must be before lines.push)
+      if (Chat.info.streamerChat && Chat.info.streamerIsMod && service !== "youtube") {
+        Chat.info.recentChatters[nick] = Date.now();
+        if (typeof StreamerChat !== "undefined") {
+          StreamerChat.renderModButtons($chatLine, nick, info.id, info["user-id"], service);
+        }
+      }
+
       Chat.info.lines.push($chatLine.wrap("<div>").parent().html());
       if (hasZeroWidth) {
         // console.log("DEBUG Message with mentions and emotes before fixZeroWidth:", $message.html());
@@ -2268,25 +2307,38 @@ Chat = {
     }
   },
 
+
   sanitizeUsername: function (username) {
     return username.replace(/\\s$/, '').trim();
   },
 
   clearChat: function (nick) {
     setTimeout(function () {
-      $('.chat_line[data-nick=' + nick + ']').remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markUserDeleted(nick, "timed out");
+      } else {
+        $('.chat_line[data-nick=' + nick + ']').remove();
+      }
     }, 200);
   },
 
   clearWholeChat: function () {
     setTimeout(function () {
-      $('.chat_line').remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markAllDeleted("cleared");
+      } else {
+        $('.chat_line').remove();
+      }
     }, 200);
   },
 
   clearMessage: function (id) {
     setTimeout(function () {
-      $(".chat_line[data-id=" + id + "]").remove();
+      if (Chat.info.streamerChat && localStorage.getItem("cyan_streamer_keep_deleted") === "true") {
+        if (typeof StreamerChat !== "undefined") StreamerChat.markDeleted(id, "deleted");
+      } else {
+        $(".chat_line[data-id=" + id + "]").remove();
+      }
     }, 100);
   },
 
@@ -2994,6 +3046,14 @@ Chat = {
               }
 
               Chat.write(nick, message.tags, message.params[1], "twitch");
+              return;
+
+            case "USERNOTICE":
+              // Announcements are sent as USERNOTICE with msg-id=announcement.
+              if (message.tags && message.tags["msg-id"] === "announcement" && message.params[1]) {
+                var aNick = message.tags["login"] || (message.prefix ? message.prefix.split("!")[0] : "");
+                Chat.write(aNick, message.tags, message.params[1], "twitch");
+              }
               return;
           }
         });

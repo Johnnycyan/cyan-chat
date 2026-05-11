@@ -1,44 +1,78 @@
-#chat_container, #info_container {
-    font-size: 48px;
+#chat_container,
+#info_container {
+  font-size: 48px;
+}
+
+.mod-btn {
+  font-size: 36px;
 }
 
 .badge {
-    width: 40px;
-    height: 40px;
-    margin-right: 5px;
-    margin-bottom: 8px;
+  width: 40px;
+  height: 40px;
+  margin-right: 5px;
+  margin-bottom: 8px;
 }
 
 .badge:last-of-type {
-    margin-right: 8px;
+  margin-right: 8px;
 }
 
 .colon {
-    margin-right: 20px;
+  margin-right: 20px;
 }
 
 .cheer_bits {
-    font-weight: 500;
-    margin-left: 5px;
-    margin-right: 10px;
+  font-weight: 500;
+  margin-left: 5px;
+  margin-right: 10px;
 }
 
 .cheer_emote {
-    max-height: 60px;
-    margin-bottom: -15px;
+  max-height: 60px;
+  margin-bottom: -15px;
 }
 
 .emote {
-    max-width: 180px;
-    max-height: 60px;
-    /* margin-right: -5px;
+  max-width: 180px;
+  max-height: 60px;
+  /* margin-right: -5px;
     margin-left: -5px; */
 }
 
 .upscale {
-    height: 60px;
+  height: 60px;
 }
 
 .emoji {
-    height: 55px;
+  height: 55px;
+}
+
+/* ---------- Streamer bar sizing ---------- */
+#streamer_auth_bar {
+  font-size: 28px;
+  height: 70px;
+}
+#streamer_bar {
+  font-size: 28px;
+  height: 108px;
+}
+#chat_input,
+#chat_send_btn {
+  height: 60px;
+}
+#command_autocomplete {
+  bottom: 112px;
+}
+.sc-modal,
+#mod_settings_panel {
+  font-size: 22px;
+}
+body.streamerchat #chat_container {
+  top: 70px;
+  bottom: 108px;
+}
+
+body.streamerchat #info_container {
+  bottom: 116px;
 }
