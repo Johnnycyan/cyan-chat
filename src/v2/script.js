@@ -1978,6 +1978,11 @@ Chat = {
         let replacedWord = word;
         let isReplaced = false;
 
+        // Prioritize Twitch emotes: skip third-party lookup if this word is a Twitch emote
+        if (replacements[word]) {
+          return { word: replacedWord, isReplaced: false };
+        }
+
         // Check personal emotes if not YouTube
         if (!isReplaced && service !== "youtube" && Chat.info.seventvPersonalEmotes[info["user-id"]]) {
           Object.entries(Chat.info.seventvPersonalEmotes[info["user-id"]]).forEach((emote) => {
