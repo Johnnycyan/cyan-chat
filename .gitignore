@@ -16,3 +16,4 @@ src/media/rickroll.webm
 src/media/stickbug.mp4
 backup/
 *.bak
+.github/prompts/plan*

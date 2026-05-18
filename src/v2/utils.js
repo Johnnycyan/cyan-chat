@@ -41,6 +41,55 @@ function appendCSS(type, name) {
   }).appendTo("head");
 }
 
+function removeCSS(type) {
+  $("link.chat_" + type).remove();
+}
+
+function replaceCSS(type, name) {
+  removeCSS(type);
+  appendCSS(type, name);
+}
+
+// Remove all emoteScale CSS links regardless of which size prefix is active.
+function removeEmoteScaleCSS() {
+  sizes.forEach(function (s) { removeCSS("emoteScale_" + s); });
+}
+
+/**
+ * Apply platform indicator body classes and CSS vars.
+ * @param {string} mode  - "none"|"badge"|"minimal"|"outline"
+ * @param {string} sides - comma-separated sides, e.g. "left" or "left,bottom"
+ * @param {string} style - "solid"|"fade"
+ * @param {number} thickness
+ * @param {number} radius
+ */
+function applyPlatformIndicator(mode, sides, style, thickness, radius) {
+  // Remove all previous pi-* classes
+  document.body.classList.forEach(function (c) {
+    if (c.startsWith("pi-")) document.body.classList.remove(c);
+  });
+
+  if (!mode || mode === "none") return;
+
+  document.body.classList.add("pi-" + mode);
+
+  if (mode === "outline") {
+    document.body.classList.add("pi-outline-" + style);
+    var sideList = (sides || "left").split(",");
+    var th = (thickness || 3) + "px";
+    document.documentElement.style.setProperty("--pi-top",    sideList.includes("top")    ? th : "0px");
+    document.documentElement.style.setProperty("--pi-right",  sideList.includes("right")  ? th : "0px");
+    document.documentElement.style.setProperty("--pi-bottom", sideList.includes("bottom") ? th : "0px");
+    document.documentElement.style.setProperty("--pi-left",   sideList.includes("left")   ? th : "0px");
+    document.documentElement.style.setProperty("--pi-radius", (radius || 0) + "px");
+    if (style === "fade") {
+      // For fade, only one side is used; pick the first one
+      var activeSide = sideList[0] || "left";
+      document.body.classList.add("pi-fade-" + activeSide);
+    }
+  }
+}
+
 const toTitleCase = (phrase) => {
   return phrase
     .toLowerCase()

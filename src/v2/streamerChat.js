@@ -159,9 +159,9 @@ var StreamerChat = (function () {
 
     function init() {
         if (!Chat.info.streamerChat) return;
-        $("#streamer_auth_bar").show();
-        initAuth();
-        bindUI();
+        if (!Chat.info.preview) $("#streamer_auth_bar").show();
+        applyDisplaySettings(loadDisplaySettings());
+        if (!Chat.info.preview) { initAuth(); bindUI(); }
     }
 
     function initAuth() {
@@ -265,9 +265,9 @@ var StreamerChat = (function () {
                     $("#streamer_login_btn").hide();
                     $("#streamer_username").text(data.display_name || data.login);
                     $("#streamer_user_info").show();
-                    if (data.is_mod) {
+                    if (data.is_mod && !Chat.info.preview) {
                         $("#streamer_bar").show();
-                    } else {
+                    } else if (!data.is_mod) {
                         showError("You are not a mod or broadcaster for this channel.");
                     }
                 })
@@ -399,13 +399,55 @@ var StreamerChat = (function () {
             executeModAction(action, nick, msgId, userId, $chatLine);
         });
 
-        // Mod settings gear
-        $("#streamer_settings_btn").on("click", openModActionsSettings);
+        // Settings gear — opens unified panel on Display tab
+        $("#streamer_settings_btn").on("click", function () { openSettingsPanel("display"); });
+
+        // Tab switching within the unified settings panel
+        $(document).on("click", ".sc-tab[data-tab]", function () {
+            var tab = $(this).data("tab");
+            if (tab === "mod") {
+                openModActionsSettings();
+            } else {
+                openSettingsPanel(tab);
+            }
+        });
+
+        // Display settings — save, reset
+        $("#ds_reset_btn").on("click", function () {
+            populateDisplayForm(Object.assign({}, DEFAULT_DISPLAY));
+        });
+        $("#ds_save_btn").on("click", function () {
+            var settings = readDisplayForm();
+            saveDisplaySettings(settings);
+            applyDisplaySettings(settings);
+            $("#mod_settings_overlay").hide();
+        });
+        // Show/hide outline sub-options
+        $("#ds_pi_mode").on("change", function () {
+            if ($(this).val() === "outline") {
+                $(".ds-pi-outline").show();
+            } else {
+                $(".ds-pi-outline").hide();
+            }
+        });
+        // Show/hide custom font input
+        $("#ds_font").on("change", function () {
+            if ($(this).val() === "-1") {
+                $("#ds_custom_font_row").show();
+            } else {
+                $("#ds_custom_font_row").hide();
+            }
+        });
+        // Close unified modal button
         $("#mod_settings_close_btn").on("click", function () { $("#mod_settings_overlay").hide(); });
         $("#mod_settings_save_btn").on("click", saveModSettings);
         $("#mod_add_type").on("change", function () {
             var isTimeout = $(this).val() === "timeout";
             $("#mod_add_duration").toggle(isTimeout);
+        });
+        // Close unified settings modal on overlay background click
+        $("#mod_settings_overlay").on("click", function (e) {
+            if (e.target === this) $(this).hide();
         });
         $("#mod_add_btn").on("click", addModAction);
 
@@ -900,6 +942,192 @@ var StreamerChat = (function () {
     }
 
     // ============================================================
+    // Display settings
+    // ============================================================
+
+    var LS_DISPLAY = "cyan_display_settings";
+
+    var DEFAULT_DISPLAY = {
+        bodyBg: "#18181b",
+        chatBg: "#242427",
+        altBgEnabled: false,
+        altBg: "#2a2a2e",
+        font: 0,
+        customFont: "",
+        size: 2,
+        height: 3,
+        emoteScale: 1,
+        platformIndicator: "none",
+        piStyle: "solid",
+        piSides: "left",
+        piThickness: 3,
+        piRadius: 0,
+    };
+
+    function loadDisplaySettings() {
+        try {
+            var saved = JSON.parse(localStorage.getItem(LS_DISPLAY));
+            if (saved && typeof saved === "object") {
+                return Object.assign({}, DEFAULT_DISPLAY, saved);
+            }
+        } catch (e) { /* ignore */ }
+        // No localStorage — seed from URL params (Chat.info)
+        var fromUrl = {};
+        if (Chat.info) {
+            fromUrl.size = Chat.info.size != null ? Chat.info.size : DEFAULT_DISPLAY.size;
+            fromUrl.height = Chat.info.height != null ? Chat.info.height : DEFAULT_DISPLAY.height;
+            if (typeof Chat.info.font === "number") {
+                fromUrl.font = Chat.info.font;
+            } else if (typeof Chat.info.font === "string" && Chat.info.font) {
+                fromUrl.font = -1;
+                fromUrl.customFont = Chat.info.font;
+            }
+            if (Chat.info.emoteScale) fromUrl.emoteScale = Chat.info.emoteScale;
+            if (Chat.info.platformIndicator) fromUrl.platformIndicator = Chat.info.platformIndicator;
+            if (Chat.info.piStyle) fromUrl.piStyle = Chat.info.piStyle;
+            if (Chat.info.piSides) fromUrl.piSides = Chat.info.piSides;
+            if (Chat.info.piThickness) fromUrl.piThickness = Chat.info.piThickness;
+            if (Chat.info.piRadius != null) fromUrl.piRadius = Chat.info.piRadius;
+        }
+        return Object.assign({}, DEFAULT_DISPLAY, fromUrl);
+    }
+
+    function saveDisplaySettings(settings) {
+        localStorage.setItem(LS_DISPLAY, JSON.stringify(settings));
+    }
+
+    function applyDisplaySettings(settings) {
+        var root = document.documentElement;
+
+        // Colors
+        root.style.setProperty("--sc-body-bg", settings.bodyBg || DEFAULT_DISPLAY.bodyBg);
+        root.style.setProperty("--sc-chat-bg", settings.chatBg || DEFAULT_DISPLAY.chatBg);
+        root.style.setProperty("--sc-alt-bg", settings.altBgEnabled ? (settings.altBg || DEFAULT_DISPLAY.altBg) : "transparent");
+
+        // Font
+        var fontIdx = parseInt(settings.font);
+        if (fontIdx === -1) {
+            // Custom font from Google Fonts
+            if (settings.customFont) {
+                loadCustomFont(settings.customFont);
+            }
+        } else if (fontIdx >= 0 && fontIdx < fonts.length) {
+            replaceCSS("font", fonts[fontIdx]);
+        }
+
+        // Size (0=tiny,1=small,2=medium,3=large)
+        var sizeIdx = parseInt(settings.size);
+        if (isNaN(sizeIdx)) sizeIdx = 2;
+        var sizeName = sizes[sizeIdx];
+        if (sizeName) replaceCSS("size", sizeName);
+        var scaleMap = { 0: 1, 1: 20 / 14, 2: 34 / 14, 3: 48 / 14 };
+        if (Chat.info) Chat.info.seven_scale = scaleMap[sizeIdx] !== undefined ? scaleMap[sizeIdx] : (34 / 14);
+
+        // Height
+        var heightIdx = parseInt(settings.height);
+        if (!isNaN(heightIdx) && heights[heightIdx]) {
+            replaceCSS("height", heights[heightIdx]);
+        }
+
+        // Emote scale
+        removeEmoteScaleCSS();
+        var emoteScaleVal = parseInt(settings.emoteScale) || 1;
+        if (emoteScaleVal > 1 && sizeName) {
+            appendCSS("emoteScale_" + sizeName, emoteScaleVal);
+        }
+
+        // Platform indicator
+        applyPlatformIndicator(
+            settings.platformIndicator || "none",
+            settings.piSides || "left",
+            settings.piStyle || "solid",
+            settings.piThickness || 3,
+            settings.piRadius || 0
+        );
+    }
+
+    function populateDisplayForm(settings) {
+        // Colors
+        $("#ds_body_bg").val(settings.bodyBg || DEFAULT_DISPLAY.bodyBg);
+        $("#ds_chat_bg").val(settings.chatBg || DEFAULT_DISPLAY.chatBg);
+        $("#ds_alt_bg_enabled").prop("checked", !!settings.altBgEnabled);
+        $("#ds_alt_bg").val(settings.altBg || DEFAULT_DISPLAY.altBg);
+
+        // Typography
+        var fontVal = settings.font != null ? settings.font : DEFAULT_DISPLAY.font;
+        $("#ds_font").val(String(fontVal));
+        if (fontVal === -1) {
+            $("#ds_custom_font_row").show();
+            $("#ds_custom_font").val(settings.customFont || "");
+        } else {
+            $("#ds_custom_font_row").hide();
+        }
+        $("#ds_size").val(String(settings.size != null ? settings.size : DEFAULT_DISPLAY.size));
+        $("#ds_height").val(String(settings.height != null ? settings.height : DEFAULT_DISPLAY.height));
+
+        // Emotes
+        $("#ds_emote_scale").val(String(settings.emoteScale != null ? settings.emoteScale : DEFAULT_DISPLAY.emoteScale));
+
+        // Platform indicator
+        var piMode = settings.platformIndicator || "none";
+        $("#ds_pi_mode").val(piMode);
+        if (piMode === "outline") {
+            $(".ds-pi-outline").show();
+        } else {
+            $(".ds-pi-outline").hide();
+        }
+        $("#ds_pi_style").val(settings.piStyle || DEFAULT_DISPLAY.piStyle);
+        $("#ds_pi_sides").val(settings.piSides || DEFAULT_DISPLAY.piSides);
+        $("#ds_pi_thickness").val(String(settings.piThickness != null ? settings.piThickness : DEFAULT_DISPLAY.piThickness));
+        $("#ds_pi_radius").val(String(settings.piRadius != null ? settings.piRadius : DEFAULT_DISPLAY.piRadius));
+
+        // Refresh Coloris so swatches reflect new values
+        if (window.Coloris) {
+            Coloris({ el: "#ds_body_bg, #ds_chat_bg, #ds_alt_bg", theme: "default", themeMode: "dark", alpha: false });
+        }
+    }
+
+    function readDisplayForm() {
+        var fontVal = parseInt($("#ds_font").val());
+        if (isNaN(fontVal)) fontVal = 0;
+        return {
+            bodyBg: $("#ds_body_bg").val() || DEFAULT_DISPLAY.bodyBg,
+            chatBg: $("#ds_chat_bg").val() || DEFAULT_DISPLAY.chatBg,
+            altBgEnabled: $("#ds_alt_bg_enabled").is(":checked"),
+            altBg: $("#ds_alt_bg").val() || DEFAULT_DISPLAY.altBg,
+            font: fontVal,
+            customFont: fontVal === -1 ? ($("#ds_custom_font").val().trim() || "") : "",
+            size: parseInt($("#ds_size").val()),
+            height: parseInt($("#ds_height").val()),
+            emoteScale: parseInt($("#ds_emote_scale").val()) || 1,
+            platformIndicator: $("#ds_pi_mode").val() || "none",
+            piStyle: $("#ds_pi_style").val() || "solid",
+            piSides: $("#ds_pi_sides").val() || "left",
+            piThickness: parseInt($("#ds_pi_thickness").val()) || 3,
+            piRadius: parseInt($("#ds_pi_radius").val()) || 0,
+        };
+    }
+
+    function openSettingsPanel(tab) {
+        tab = tab || "display";
+        $(".sc-tab").removeClass("sc-tab--active");
+        $(".sc-tab[data-tab='" + tab + "']").addClass("sc-tab--active");
+        $("[id^='settings_tab_']").hide();
+        $("#settings_tab_" + tab).show();
+        if (tab === "display") {
+            populateDisplayForm(loadDisplaySettings());
+        } else if (tab === "mod") {
+            openModActionsSettings();
+            return; // openModActionsSettings already calls show()
+        }
+        $("#mod_settings_overlay").show();
+    }
+
+    function openDisplaySettings() {
+        openSettingsPanel("display");
+    }
+
+    // ============================================================
     // Mod settings panel
     // ============================================================
 
@@ -936,6 +1164,11 @@ var StreamerChat = (function () {
 
         // Keep-deleted toggle state
         $("#keep_deleted_toggle").prop("checked", localStorage.getItem(LS_KEEP_DELETED) === "true");
+        // Ensure mod tab is active within the unified panel
+        $(".sc-tab").removeClass("sc-tab--active");
+        $(".sc-tab[data-tab='mod']").addClass("sc-tab--active");
+        $("[id^='settings_tab_']").hide();
+        $("#settings_tab_mod").show();
         $("#mod_settings_overlay").show();
     }
 

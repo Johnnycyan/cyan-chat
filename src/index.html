@@ -367,8 +367,7 @@
                         </select>
                     </div>
                     <div class="form-field">
-                        <label for="scale"
-                            data-tooltip="Scales the entire chat widget down.">
+                        <label for="scale" data-tooltip="Scales the entire chat widget down.">
                             Chat Scale
                         </label>
                         <select name="scale" class="standardized-width">
@@ -448,6 +447,63 @@
                             <option value="5">Thick</option>
                         </select>
                     </div>
+                    <div class="form-field">
+                        <label for="platform_indicator"
+                            data-tooltip="Shows which platform (Twitch/YouTube) each message is from.">Platform
+                            Indicator</label>
+                        <select name="platform_indicator" class="standardized-width" id="platform_indicator_select">
+                            <option value="none" selected>Off</option>
+                            <option value="badge">Badge (icon)</option>
+                            <option value="minimal">Minimal (dot)</option>
+                            <option value="outline">Outline</option>
+                        </select>
+                    </div>
+                    <!-- Outline sub-options (shown only when outline is selected) -->
+                    <div class="form-field pi-outline-options" style="display:none;">
+                        <label for="pi_style" data-tooltip="Border style for the outline indicator.">Outline
+                            Style</label>
+                        <select name="pi_style" class="standardized-width">
+                            <option value="solid" selected>Solid</option>
+                            <option value="fade">Fade</option>
+                        </select>
+                    </div>
+                    <div class="form-field pi-outline-options" style="display:none;">
+                        <label for="pi_sides"
+                            data-tooltip="Which side(s) to show the border on. For fade, only the first side is used.">Outline
+                            Sides</label>
+                        <select name="pi_sides" class="standardized-width">
+                            <option value="left" selected>Left</option>
+                            <option value="right">Right</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                            <option value="left,right">Left + Right</option>
+                            <option value="top,bottom">Top + Bottom</option>
+                            <option value="left,top">Left + Top</option>
+                            <option value="left,bottom">Left + Bottom</option>
+                        </select>
+                    </div>
+                    <div class="form-field pi-outline-options" style="display:none;">
+                        <label for="pi_thickness" data-tooltip="Border thickness in pixels.">Outline Thickness
+                            (px)</label>
+                        <select name="pi_thickness" class="standardized-width">
+                            <option value="1">1px</option>
+                            <option value="2">2px</option>
+                            <option value="3" selected>3px</option>
+                            <option value="4">4px</option>
+                            <option value="5">5px</option>
+                            <option value="6">6px</option>
+                        </select>
+                    </div>
+                    <div class="form-field pi-outline-options" style="display:none;">
+                        <label for="pi_radius" data-tooltip="Border radius in pixels.">Outline Radius (px)</label>
+                        <select name="pi_radius" class="standardized-width">
+                            <option value="0" selected>0 (none)</option>
+                            <option value="2">2px</option>
+                            <option value="4">4px</option>
+                            <option value="6">6px</option>
+                            <option value="8">8px</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -472,8 +528,7 @@
                     </div>
                     <div class="checkbox-row">
                         <label for="sms" data-tooltip="Click for more info">
-                            <a href="javascript:void(0);"
-                                onclick="event.preventDefault(); showPopup('sms-theme')"
+                            <a href="javascript:void(0);" onclick="event.preventDefault(); showPopup('sms-theme')"
                                 style="color:var(--primary)">SMS Theme*</a>
                         </label>
                         <input type="checkbox" name="sms" id="sms" />
@@ -485,8 +540,7 @@
                             class="standardized-width" />
                     </div>
                     <div class="checkbox-row">
-                        <label for="normal_chat"
-                            data-tooltip="Dark themed chat window like native Twitch chat">
+                        <label for="normal_chat" data-tooltip="Dark themed chat window like native Twitch chat">
                             Normal Chat Mode
                         </label>
                         <input type="checkbox" name="normal_chat" id="normal_chat" />
@@ -495,6 +549,12 @@
                         <label for="small_caps">Use Small Caps</label>
                         <input type="checkbox" name="small_caps" id="small_caps" />
                     </div>
+                    <div class="checkbox-row">
+                        <label for="streamer_chat"
+                            data-tooltip="Enables streamer mode: mod controls, saved display settings, and platform indicator config in-overlay.">Streamer
+                            Chat</label>
+                        <input type="checkbox" name="streamer_chat" id="streamer_chat" />
+                    </div>
                 </div>
             </div>
 
@@ -502,8 +562,7 @@
             <div class="tab-content" id="tab-features">
                 <div class="form-section">
                     <div class="checkbox-row">
-                        <label for="readable"
-                            data-tooltip="Uses an algorithm to make username colors more readable">
+                        <label for="readable" data-tooltip="Uses an algorithm to make username colors more readable">
                             Readable Colors
                         </label>
                         <input type="checkbox" name="readable" id="readable" checked />
@@ -524,22 +583,19 @@
                         <input type="checkbox" name="colon" id="colon" />
                     </div>
                     <div class="checkbox-row">
-                        <label for="big_emotes"
-                            data-tooltip="When the message only has emotes, they are bigger">
+                        <label for="big_emotes" data-tooltip="When the message only has emotes, they are bigger">
                             Big When Only Emotes
                         </label>
                         <input type="checkbox" name="big_emotes" id="big_emotes" />
                     </div>
                     <div class="checkbox-row">
-                        <label for="highlight"
-                            data-tooltip="Show highlighted messages from channel point redeems">
+                        <label for="highlight" data-tooltip="Show highlighted messages from channel point redeems">
                             Highlighted Messages
                         </label>
                         <input type="checkbox" name="highlight" id="highlight" checked />
                     </div>
                     <div class="checkbox-row">
-                        <label for="gigantify"
-                            data-tooltip="Show gigantified emotes from the Twitch Power-up">
+                        <label for="gigantify" data-tooltip="Show gigantified emotes from the Twitch Power-up">
                             Gigantified Emotes
                         </label>
                         <input type="checkbox" name="gigantify" id="gigantify" checked />
@@ -551,16 +607,14 @@
                         <input type="checkbox" name="show_redeems" id="show_redeems" checked />
                     </div>
                     <div class="checkbox-row">
-                        <label for="highlight_mentions"
-                            data-tooltip="Highlight messages that mention the channel name">
+                        <label for="highlight_mentions" data-tooltip="Highlight messages that mention the channel name">
                             Highlight Mentions
                         </label>
                         <input type="checkbox" name="highlight_mentions" id="highlight_mentions" />
                     </div>
-                    <div class="form-field highlight-mention-color-field"
-                        style="display: none; padding-left: 8px;">
-                        <label for="highlight_mention_color"
-                            data-tooltip="Color for mention highlights">Mention Highlight Color</label>
+                    <div class="form-field highlight-mention-color-field" style="display: none; padding-left: 8px;">
+                        <label for="highlight_mention_color" data-tooltip="Color for mention highlights">Mention
+                            Highlight Color</label>
                         <div class="color-picker square">
                             <input type="text" name="highlight_mention_color" class="coloris instance1"
                                 value="#ffff00" />
@@ -573,8 +627,8 @@
                         <input type="checkbox" name="pronouns" id="pronouns" />
                     </div>
                     <div class="form-field pronoun-sub-options" style="display: none; padding-left: 8px;">
-                        <label for="pronoun_color_mode"
-                            data-tooltip="Choose how to color pronoun badges">Pronoun Colors</label>
+                        <label for="pronoun_color_mode" data-tooltip="Choose how to color pronoun badges">Pronoun
+                            Colors</label>
                         <select name="pronoun_color_mode" class="standardized-width" disabled>
                             <option value="default" selected>Default Gradients</option>
                             <option value="single">Single Custom Gradient</option>
@@ -608,8 +662,7 @@
                         </div>
                     </div>
                     <div class="checkbox-row">
-                        <label for="yt_emotes"
-                            data-tooltip="Show BTTV/FFZ/7TV channel emotes in YouTube chat messages">
+                        <label for="yt_emotes" data-tooltip="Show BTTV/FFZ/7TV channel emotes in YouTube chat messages">
                             YouTube Emote Processing
                         </label>
                         <input type="checkbox" name="yt_emotes" id="yt_emotes" checked />
@@ -655,15 +708,13 @@
                         <input type="checkbox" name="disable_rickroll" id="disable_rickroll" />
                     </div>
                     <div class="checkbox-row">
-                        <label for="disable_ytplay"
-                            data-tooltip="Disable being able to embed YouTube videos">
+                        <label for="disable_ytplay" data-tooltip="Disable being able to embed YouTube videos">
                             Disable YouTube Embeds
                         </label>
                         <input type="checkbox" name="disable_ytplay" id="disable_ytplay" />
                     </div>
                     <div class="checkbox-row">
-                        <label for="disable_ytstop"
-                            data-tooltip="Disable being able to stop YouTube embeds">
+                        <label for="disable_ytstop" data-tooltip="Disable being able to stop YouTube embeds">
                             Disable YouTube Stop
                         </label>
                         <input type="checkbox" name="disable_ytstop" id="disable_ytstop" />
@@ -680,8 +731,7 @@
             <div class="tab-content" id="tab-messages">
                 <div class="form-section">
                     <div class="checkbox-row fade-row">
-                        <label for="fade_bool"
-                            data-tooltip="Fades and removes old messages after a set time">
+                        <label for="fade_bool" data-tooltip="Fades and removes old messages after a set time">
                             Fade Messages
                         </label>
                         <input type="checkbox" name="fade_bool" id="fade_bool" />
@@ -701,16 +751,14 @@
                     </div>
                     <div class="checkbox-row">
                         <label for="sync" data-tooltip="Click for more info">
-                            <a href="javascript:void(0);"
-                                onclick="event.preventDefault(); showPopup('emote-sync')"
+                            <a href="javascript:void(0);" onclick="event.preventDefault(); showPopup('emote-sync')"
                                 style="color:var(--primary)">Disable Emote Sync*</a>
                         </label>
                         <input type="checkbox" name="sync" id="sync" />
                     </div>
                     <div class="checkbox-row">
                         <label for="pruning" data-tooltip="Click for more info">
-                            <a href="javascript:void(0);"
-                                onclick="event.preventDefault(); showPopup('message-pruning')"
+                            <a href="javascript:void(0);" onclick="event.preventDefault(); showPopup('message-pruning')"
                                 style="color:var(--primary)">Disable Message Pruning*</a>
                         </label>
                         <input type="checkbox" name="pruning" id="pruning" />

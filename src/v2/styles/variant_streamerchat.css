@@ -9,13 +9,13 @@ body.streamerchat select {
 }
 
 body.streamerchat {
-  background: #18181b;
+  background: var(--sc-body-bg, #18181b);
   overflow: hidden;
 }
 
 /* Push chat up to make room for the fixed bottom bar */
 #chat_container {
-  background-color: #242427;
+  background-color: var(--sc-chat-bg, #242427);
   padding: 8px 12px;
   width: 100%;
   /* Bottom padding = auth bar (36px) + streamer bar (60px) + gap */
@@ -32,7 +32,7 @@ body.streamerchat #chat_container {
   padding-bottom: 8px;
   overflow-y: scroll;
   scrollbar-gutter: stable;
-  scrollbar-color: #3a3a44 #18181b;
+  scrollbar-color: #3a3a44 var(--sc-body-bg, #18181b);
   scrollbar-width: thin;
 }
 body.streamerchat #chat_container::-webkit-scrollbar {
@@ -396,6 +396,46 @@ body.streamerchat #chat_container::-webkit-scrollbar-thumb:hover {
   justify-content: flex-end;
 }
 
+.sc-modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid #2f2f35;
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+/* ---------- Settings panel tabs ---------- */
+.sc-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #2f2f35;
+  margin-bottom: 4px;
+}
+
+.sc-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #adadb8;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 600;
+  padding: 6px 14px;
+  margin-bottom: -1px;
+  border-radius: 4px 4px 0 0;
+  transition:
+    color 0.1s,
+    border-color 0.1s;
+}
+.sc-tab:hover {
+  color: #efeff1;
+}
+.sc-tab--active {
+  color: #efeff1;
+  border-bottom-color: #9147ff;
+}
+
 .sc-btn {
   border: none;
   border-radius: 5px;
@@ -634,4 +674,98 @@ body.streamerchat #chat_container::-webkit-scrollbar-thumb:hover {
   flex-shrink: 0;
   vertical-align: middle;
   align-self: center;
+}
+
+/* ============================================================
+   Display settings panel
+   ============================================================ */
+#display_settings_panel {
+  width: min(480px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  font-size: 0.92em;
+}
+
+#display_settings_panel details {
+  margin-bottom: 10px;
+  border: 1px solid #2f2f35;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#display_settings_panel details summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  background: #1e1e22;
+  color: #bfbfc7;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.82em;
+  letter-spacing: 0.04em;
+  list-style: none;
+  user-select: none;
+}
+
+#display_settings_panel details summary::before {
+  content: "▶ ";
+  font-size: 0.7em;
+  opacity: 0.6;
+}
+#display_settings_panel details[open] summary::before {
+  content: "▼ ";
+}
+
+.sc-ds-section {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-ds-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sc-ds-row > label {
+  min-width: 120px;
+  flex-shrink: 0;
+  color: #bfbfc7;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 0.95em;
+}
+
+.sc-ds-row select {
+  flex: 1;
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+  color: #efeff1;
+  font-size: 1em;
+  padding: 4px 8px;
+}
+
+.sc-ds-row input[type="text"] {
+  flex: 1;
+  background: #18181b;
+  border: 1px solid #3a3a44;
+  border-radius: 4px;
+  color: #efeff1;
+  font-size: 1em;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.sc-ds-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* display_settings_btn palette icon button */
+#display_settings_btn {
+  font-size: 16px;
 }

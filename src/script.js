@@ -286,9 +286,10 @@ function resetForm() {
     $highlightMentionColor.val("#ffff00");
     $(".highlight-mention-color-field").hide();
     $normalChat.prop("checked", false);
+    $platformIndicator.val("none");
+    $(".pi-outline-options").hide();
 
-    // Re-enable all disabled fields
-    $center.prop("disabled", false);
+    // Re-enable all disabled fields    $center.prop("disabled", false);
     $normalChat.prop("disabled", false);
     $paints.prop("disabled", false);
     $colon.prop("disabled", false);
@@ -468,6 +469,12 @@ function generateURL(event) {
         highlight_mentions: $highlightMentions.is(":checked"),
         highlight_mention_color: $highlightMentions.is(":checked") ? $highlightMentionColor.val().replace("#", "") : false,
         normal_chat: $normalChat.is(":checked"),
+        streamer_chat: $streamerChat.is(":checked") ? "true" : false,
+        platform_indicator: $platformIndicator.val() !== "none" ? $platformIndicator.val() : false,
+        pi_style: $platformIndicator.val() === "outline" ? $piStyle.val() : false,
+        pi_sides: $platformIndicator.val() === "outline" ? $piSides.val() : false,
+        pi_thickness: ($platformIndicator.val() === "outline" && $piThickness.val() !== "3") ? $piThickness.val() : false,
+        pi_radius: ($platformIndicator.val() === "outline" && $piRadius.val() !== "0") ? $piRadius.val() : false,
     };
 
     const params = encodeQueryData(data);
@@ -565,6 +572,12 @@ function updatePreview() {
             highlight_mentions: $highlightMentions.is(":checked"),
             highlight_mention_color: $highlightMentions.is(":checked") ? $highlightMentionColor.val().replace("#", "") : false,
             normal_chat: $normalChat.is(":checked"),
+            streamer_chat: $streamerChat.is(":checked") ? "true" : false,
+            platform_indicator: $platformIndicator.val() !== "none" ? $platformIndicator.val() : false,
+            pi_style: $platformIndicator.val() === "outline" ? $piStyle.val() : false,
+            pi_sides: $platformIndicator.val() === "outline" ? $piSides.val() : false,
+            pi_thickness: ($platformIndicator.val() === "outline" && $piThickness.val() !== "3") ? $piThickness.val() : false,
+            pi_radius: ($platformIndicator.val() === "outline" && $piRadius.val() !== "0") ? $piRadius.val() : false,
         };
 
         const params = encodeQueryData(data);
@@ -642,6 +655,12 @@ const $showRedeems = $('input[name="show_redeems"]');
 const $highlightMentions = $('input[name="highlight_mentions"]');
 const $highlightMentionColor = $('input[name="highlight_mention_color"]');
 const $normalChat = $('input[name="normal_chat"]');
+const $streamerChat = $('input[name="streamer_chat"]');
+const $platformIndicator = $('select[name="platform_indicator"]');
+const $piStyle = $('select[name="pi_style"]');
+const $piSides = $('select[name="pi_sides"]');
+const $piThickness = $('select[name="pi_thickness"]');
+const $piRadius = $('select[name="pi_radius"]');
 
 // Specific handlers for options with interdependencies
 $fade_bool.change(fadeOption);
@@ -658,6 +677,20 @@ $disableYTPlay.change(commandsUpdate);
 $disableYTStop.change(commandsUpdate);
 $disableIMG.change(commandsUpdate);
 $generator.submit(generateURL);
+
+// Show/hide outline sub-options based on platform indicator selection
+$platformIndicator.change(function () {
+    if ($(this).val() === "outline") {
+        $(".pi-outline-options").show();
+    } else {
+        $(".pi-outline-options").hide();
+    }
+    updatePreview();
+});
+$piStyle.change(updatePreview);
+$piSides.change(updatePreview);
+$piThickness.change(updatePreview);
+$piRadius.change(updatePreview);
 $url.click(copyUrl);
 $alert.click(showUrl);
 $reset.click(resetForm);

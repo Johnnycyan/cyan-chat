@@ -410,3 +410,142 @@ body {
   padding-left: 8px;
   border-radius: 4px;
 }
+
+/* ============================================================
+   Platform Indicators
+   Controlled by body classes: pi-badge, pi-outline, pi-minimal
+   ============================================================ */
+
+/* Alternating row background (streamer mode) */
+body.streamerchat #chat_container .chat_line:nth-child(even) {
+  background-color: var(--sc-alt-bg, transparent);
+}
+
+/* Base: rendered but hidden by default; CSS body classes control visibility */
+img.badge.platform-indicator {
+  display: none;
+}
+
+/* ---- Badge (full icon, same size as other badges) ---- */
+body.pi-badge img.badge.platform-indicator {
+  display: inline-block;
+}
+
+/* ---- Minimal (small colored dot/icon) ---- */
+body.pi-minimal img.badge.platform-indicator {
+  display: inline-block;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50%;
+  margin-right: 4px !important;
+  margin-bottom: 0 !important;
+  padding: 0;
+  object-fit: cover;
+}
+body.pi-minimal img.badge.platform-twitch.platform-indicator {
+  background: #9146ff;
+}
+body.pi-minimal img.badge.platform-youtube.platform-indicator {
+  background: #ff0000;
+}
+
+/* ---- Outline (solid border) ---- */
+body.pi-outline.pi-outline-solid .chat_line {
+  border-style: solid;
+  border-color: transparent;
+  border-top-width: var(--pi-top, 0px);
+  border-right-width: var(--pi-right, 0px);
+  border-bottom-width: var(--pi-bottom, 0px);
+  border-left-width: var(--pi-left, 3px);
+  border-radius: var(--pi-radius, 0px);
+}
+body.pi-outline.pi-outline-solid .chat_line.platform-twitch {
+  border-color: #9146ff;
+}
+body.pi-outline.pi-outline-solid .chat_line.platform-youtube {
+  border-color: #ff0000;
+}
+
+/* ---- Outline (fade / gradient) — single-side only ---- */
+body.pi-outline.pi-outline-fade .chat_line {
+  position: relative;
+}
+body.pi-outline.pi-outline-fade .chat_line::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--pi-radius, 0px);
+}
+/* Fade direction per active side — solid edge + narrow 14px fade to transparent */
+body.pi-outline.pi-outline-fade.pi-fade-left
+  .chat_line.platform-twitch::before {
+  background: linear-gradient(
+    to right,
+    rgba(145, 70, 255, 1) 0,
+    rgba(145, 70, 255, 0.25) var(--pi-left, 3px),
+    transparent calc(var(--pi-left, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-left
+  .chat_line.platform-youtube::before {
+  background: linear-gradient(
+    to right,
+    rgba(255, 0, 0, 1) 0,
+    rgba(255, 0, 0, 0.25) var(--pi-left, 3px),
+    transparent calc(var(--pi-left, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-right
+  .chat_line.platform-twitch::before {
+  background: linear-gradient(
+    to left,
+    rgba(145, 70, 255, 1) 0,
+    rgba(145, 70, 255, 0.25) var(--pi-right, 3px),
+    transparent calc(var(--pi-right, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-right
+  .chat_line.platform-youtube::before {
+  background: linear-gradient(
+    to left,
+    rgba(255, 0, 0, 1) 0,
+    rgba(255, 0, 0, 0.25) var(--pi-right, 3px),
+    transparent calc(var(--pi-right, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-top .chat_line.platform-twitch::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(145, 70, 255, 1) 0,
+    rgba(145, 70, 255, 0.25) var(--pi-top, 3px),
+    transparent calc(var(--pi-top, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-top
+  .chat_line.platform-youtube::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 0, 0, 1) 0,
+    rgba(255, 0, 0, 0.25) var(--pi-top, 3px),
+    transparent calc(var(--pi-top, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-bottom
+  .chat_line.platform-twitch::before {
+  background: linear-gradient(
+    to top,
+    rgba(145, 70, 255, 1) 0,
+    rgba(145, 70, 255, 0.25) var(--pi-bottom, 3px),
+    transparent calc(var(--pi-bottom, 3px) + 80px)
+  );
+}
+body.pi-outline.pi-outline-fade.pi-fade-bottom
+  .chat_line.platform-youtube::before {
+  background: linear-gradient(
+    to top,
+    rgba(255, 0, 0, 1) 0,
+    rgba(255, 0, 0, 0.25) var(--pi-bottom, 3px),
+    transparent calc(var(--pi-bottom, 3px) + 80px)
+  );
+}

@@ -14,6 +14,8 @@
     return params;
   })(window.location.search.substr(1).split("&"));
 
+
+
   // // Check if 'v' parameter exists
   // if (!$.QueryString.hasOwnProperty("v")) {
   //   console.log("'v' parameter is not present.");
@@ -31,6 +33,12 @@
   //   }
   // }
 })(jQuery);
+
+// Platform indicator SVG icons (inline, no external requests)
+var TWITCH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 28" fill="#9146ff"><path d="M2.149 0L0 6.262v19.476h6.571V29l3.806-3.262h5.089L24 16.81V0H2.149zm20.02 15.619l-4.15 3.887h-6.049l-3.806 3.262v-3.262H3.938V1.828h18.231v13.791zm-4.15-7.726V13.2h-2.475V7.893h2.475zm-6.57 0V13.2H8.973V7.893h2.475z"/></svg>';
+var YOUTUBE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.495 6.205a3.007 3.007 0 00-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 00.527 6.205a31.247 31.247 0 00-.522 5.805 31.247 31.247 0 00.522 5.783 3.007 3.007 0 002.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 002.088-2.088 31.247 31.247 0 00.5-5.783 31.247 31.247 0 00-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>';
+var TWITCH_BADGE_SRC = "data:image/svg+xml," + encodeURIComponent(TWITCH_SVG);
+var YOUTUBE_BADGE_SRC = "data:image/svg+xml," + encodeURIComponent(YOUTUBE_SVG);
 
 Chat = {
   info: {
@@ -227,6 +235,27 @@ Chat = {
     sharedChatInitializing: false,
     sharedChatChannels: {},  // { channelID: { name, emotes, ffzModBadge, ffzVipBadge, profileImage, sevenConn } }
     sharedChatEventSource: null,
+    // Platform indicators
+    platformIndicator:
+      "platform_indicator" in $.QueryString
+        ? $.QueryString.platform_indicator.toLowerCase()
+        : "none",
+    piSides:
+      "pi_sides" in $.QueryString
+        ? $.QueryString.pi_sides.toLowerCase()
+        : "left",
+    piStyle:
+      "pi_style" in $.QueryString
+        ? $.QueryString.pi_style.toLowerCase()
+        : "solid",
+    piThickness:
+      "pi_thickness" in $.QueryString
+        ? parseInt($.QueryString.pi_thickness) || 3
+        : 3,
+    piRadius:
+      "pi_radius" in $.QueryString
+        ? parseInt($.QueryString.pi_radius) || 0
+        : 0,
   },
 
   loadEmotes: function (channelID) {
@@ -915,7 +944,7 @@ Chat = {
       }
 
       // Load CSS
-      let size = sizes[Chat.info.size - 1];
+      let size = sizes[Chat.info.size]; // 0=tiny,1=small,2=medium,3=large
       var font;
       if (typeof Chat.info.font === "number") {
         font = fonts[Chat.info.font];
@@ -924,7 +953,9 @@ Chat = {
         loadCustomFont(Chat.info.font);
       }
 
-      if (Chat.info.size == 1) {
+      if (Chat.info.size == 0) {
+        Chat.info.seven_scale = 1; // 14/14
+      } else if (Chat.info.size == 1) {
         Chat.info.seven_scale = 20 / 14;
       } else if (Chat.info.size == 2) {
         Chat.info.seven_scale = 34 / 14;
@@ -974,7 +1005,6 @@ Chat = {
         Chat.info.normalChat = false;
         appendCSS("variant", "streamerchat");
         document.body.classList.add("streamerchat");
-        if (typeof StreamerChat !== "undefined") StreamerChat.init();
       }
 
       appendCSS("size", size);
@@ -1022,6 +1052,12 @@ Chat = {
         // Update viewport to accommodate scaling
         document.documentElement.style.setProperty('--inv-scale', 1 / Chat.info.scale);
       }
+
+      // Apply platform indicator body classes from URL params
+      applyPlatformIndicator(Chat.info.platformIndicator, Chat.info.piSides, Chat.info.piStyle, Chat.info.piThickness, Chat.info.piRadius);
+
+      // Apply saved display settings (streamer chat) — runs after all URL-param CSS so replaceCSS properly overrides
+      if (Chat.info.streamerChat && typeof StreamerChat !== "undefined") StreamerChat.init();
 
       // Load badges
       TwitchAPI("/chat/badges/global").done(function (res) {
@@ -1658,12 +1694,21 @@ Chat = {
       if (Chat.info.animate) {
         $chatLine.addClass("animate");
       }
+      if (service) {
+        $chatLine.addClass("platform-" + service);
+      }
       $chatLine.attr("data-nick", nick);
       $chatLine.attr("data-time", Date.now());
       $chatLine.attr("data-id", info.id);
       if (info["user-id"]) $chatLine.attr("data-user-id", info["user-id"]);
       var $userInfo = $("<span></span>");
       $userInfo.addClass("user_info");
+
+      // Platform indicator badge (img, hidden by default — CSS pi-* body classes control visibility)
+      var $pi = $('<img alt="" class="badge platform-indicator platform-' + (service || '') + '">');
+      if (service === "twitch") $pi.attr("src", TWITCH_BADGE_SRC);
+      else if (service === "youtube") $pi.attr("src", YOUTUBE_BADGE_SRC);
+      $userInfo.append($pi);
 
       // if (service == "youtube") {
       //     $userInfo.append('<span id="service" style="color:red";>> | </span>')

@@ -14,6 +14,7 @@ const fonts = [
 ];
 
 const sizes = [
+    'tiny',
     'small',
     'medium',
     'large'

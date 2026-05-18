@@ -25,6 +25,8 @@
     <!-- youtube custom code -->
     <script src="youtube.js"></script>
     <!-- streamer chat mode -->
+    <link rel="stylesheet" href="../styles/coloris.min.css">
+    <script src="../styles/coloris.min.js"></script>
     <script src="streamerChat.js"></script>
 </head>
 
@@ -41,7 +43,7 @@
             <span id="streamer_username"></span>
         </div>
         <span id="streamer_auth_error"></span>
-        <button id="streamer_settings_btn" title="Mod settings">&#9881;</button>
+        <button id="streamer_settings_btn" title="Settings">&#9881;</button>
     </div>
 
     <!-- Streamer Chat: fixed chat input bar (bottom) -->
@@ -111,35 +113,197 @@
         </div>
     </div>
 
-    <!-- Streamer Chat: mod settings panel (shown as modal) -->
+    <!-- Streamer Chat: display settings panel -->
+    <!-- (display settings are now a tab inside #mod_settings_overlay) -->
+
+    <!-- Streamer Chat: unified settings panel (Display + Moderation tabs) -->
     <div id="mod_settings_overlay" class="sc-modal-overlay" style="display:none">
-        <div id="mod_settings_panel">
-            <h2>Mod Settings</h2>
-            <div>
-                <label style="margin-bottom:8px;display:block">Mod Action Buttons</label>
-                <div id="mod_actions_list"></div>
+        <div id="mod_settings_panel" class="sc-modal">
+            <h2>Settings</h2>
+            <div class="sc-tabs">
+                <button class="sc-tab sc-tab--active" data-tab="display">Display</button>
+                <button class="sc-tab" data-tab="mod">Moderation</button>
             </div>
-            <div class="sc-add-action-form" id="mod_add_form">
-                <label>Add Action</label>
-                <select id="mod_add_type">
-                    <option value="delete">Delete message</option>
-                    <option value="timeout">Timeout</option>
-                    <option value="ban">Ban</option>
-                    <option value="unban">Unban</option>
-                </select>
-                <input type="text" id="mod_add_label" placeholder="Button label (e.g. 10m)" maxlength="20" />
-                <input type="number" id="mod_add_duration" placeholder="Duration (sec, timeout only)" min="1"
-                    max="1209600" style="display:none" />
-                <button class="sc-btn sc-btn--secondary" id="mod_add_btn">Add</button>
+
+            <!-- Display Settings tab -->
+            <div id="settings_tab_display">
+                <details open>
+                    <summary>Colors</summary>
+                    <div class="sc-ds-section">
+                        <div class="sc-ds-row">
+                            <label>Background</label>
+                            <input type="text" id="ds_body_bg" class="clr-field coloris" autocomplete="off" />
+                        </div>
+                        <div class="sc-ds-row">
+                            <label>Chat Area</label>
+                            <input type="text" id="ds_chat_bg" class="clr-field coloris" autocomplete="off" />
+                        </div>
+                        <div class="sc-ds-row">
+                            <label>Alternating Row</label>
+                            <input type="checkbox" id="ds_alt_bg_enabled" />
+                            <input type="text" id="ds_alt_bg" class="clr-field coloris" autocomplete="off"
+                                style="margin-left:6px;" />
+                        </div>
+                    </div>
+                </details>
+
+                <details open>
+                    <summary>Typography</summary>
+                    <div class="sc-ds-section">
+                        <div class="sc-ds-row">
+                            <label>Font</label>
+                            <select id="ds_font">
+                                <option value="-1">Custom&hellip;</option>
+                                <option value="0">Baloo Tammudu</option>
+                                <option value="1">Segoe UI</option>
+                                <option value="2">Roboto</option>
+                                <option value="3">Lato</option>
+                                <option value="4">Noto Sans</option>
+                                <option value="5">Source Code Pro</option>
+                                <option value="6">Impact</option>
+                                <option value="7">Comfortaa</option>
+                                <option value="8">Dancing Script</option>
+                                <option value="9">Indie Flower</option>
+                                <option value="10">Press Start 2P</option>
+                                <option value="11">Wallpoet</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row" id="ds_custom_font_row" style="display:none">
+                            <label>Font Name</label>
+                            <input type="text" id="ds_custom_font" placeholder="e.g. Nunito" autocomplete="off" />
+                        </div>
+                        <div class="sc-ds-row">
+                            <label>Text Size</label>
+                            <select id="ds_size">
+                                <option value="0">Tiny</option>
+                                <option value="1">Small</option>
+                                <option value="2" selected>Medium</option>
+                                <option value="3">Large</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row">
+                            <label>Line Height</label>
+                            <select id="ds_height">
+                                <option value="0">Smallest</option>
+                                <option value="1">Smaller</option>
+                                <option value="2">Small</option>
+                                <option value="3" selected>Medium</option>
+                                <option value="4">Large</option>
+                                <option value="5">Largest</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+
+                <details open>
+                    <summary>Emotes</summary>
+                    <div class="sc-ds-section">
+                        <div class="sc-ds-row">
+                            <label>Emote Scale</label>
+                            <select id="ds_emote_scale">
+                                <option value="1" selected>1x</option>
+                                <option value="2">2x</option>
+                                <option value="3">3x</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>Platform Indicator</summary>
+                    <div class="sc-ds-section">
+                        <div class="sc-ds-row">
+                            <label>Style</label>
+                            <select id="ds_pi_mode">
+                                <option value="none" selected>Off</option>
+                                <option value="badge">Badge (icon)</option>
+                                <option value="minimal">Minimal (dot)</option>
+                                <option value="outline">Outline</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row ds-pi-outline" style="display:none">
+                            <label>Outline Style</label>
+                            <select id="ds_pi_style">
+                                <option value="solid" selected>Solid</option>
+                                <option value="fade">Fade</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row ds-pi-outline" style="display:none">
+                            <label>Sides</label>
+                            <select id="ds_pi_sides">
+                                <option value="left" selected>Left</option>
+                                <option value="right">Right</option>
+                                <option value="top">Top</option>
+                                <option value="bottom">Bottom</option>
+                                <option value="left,right">Left + Right</option>
+                                <option value="top,bottom">Top + Bottom</option>
+                                <option value="left,top">Left + Top</option>
+                                <option value="left,bottom">Left + Bottom</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row ds-pi-outline" style="display:none">
+                            <label>Thickness (px)</label>
+                            <select id="ds_pi_thickness">
+                                <option value="1">1px</option>
+                                <option value="2">2px</option>
+                                <option value="3" selected>3px</option>
+                                <option value="4">4px</option>
+                                <option value="5">5px</option>
+                                <option value="6">6px</option>
+                            </select>
+                        </div>
+                        <div class="sc-ds-row ds-pi-outline" style="display:none">
+                            <label>Radius (px)</label>
+                            <select id="ds_pi_radius">
+                                <option value="0" selected>0 (none)</option>
+                                <option value="2">2px</option>
+                                <option value="4">4px</option>
+                                <option value="6">6px</option>
+                                <option value="8">8px</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="sc-modal-actions">
+                    <button class="sc-btn sc-btn--secondary" id="ds_reset_btn">Reset Defaults</button>
+                    <button class="sc-btn sc-btn--primary" id="ds_save_btn">Save</button>
+                </div>
             </div>
-            <div class="sc-toggle-row">
-                <input type="checkbox" id="keep_deleted_toggle" class="sc-toggle" />
-                <label for="keep_deleted_toggle" style="text-transform:none;color:#efeff1;letter-spacing:0">Keep deleted
-                    messages visible (strikethrough)</label>
+
+            <!-- Moderation Settings tab -->
+            <div id="settings_tab_mod" style="display:none">
+                <div>
+                    <label style="margin-bottom:8px;display:block">Mod Action Buttons</label>
+                    <div id="mod_actions_list"></div>
+                </div>
+                <div class="sc-add-action-form" id="mod_add_form">
+                    <label>Add Action</label>
+                    <select id="mod_add_type">
+                        <option value="delete">Delete message</option>
+                        <option value="timeout">Timeout</option>
+                        <option value="ban">Ban</option>
+                        <option value="unban">Unban</option>
+                    </select>
+                    <input type="text" id="mod_add_label" placeholder="Button label (e.g. 10m)" maxlength="20" />
+                    <input type="number" id="mod_add_duration" placeholder="Duration (sec, timeout only)" min="1"
+                        max="1209600" style="display:none" />
+                    <button class="sc-btn sc-btn--secondary" id="mod_add_btn">Add</button>
+                </div>
+                <div class="sc-toggle-row">
+                    <input type="checkbox" id="keep_deleted_toggle" class="sc-toggle" />
+                    <label for="keep_deleted_toggle" style="text-transform:none;color:#efeff1;letter-spacing:0">Keep
+                        deleted
+                        messages visible (strikethrough)</label>
+                </div>
+                <div class="sc-modal-actions">
+                    <button class="sc-btn sc-btn--primary" id="mod_settings_save_btn">Save</button>
+                </div>
             </div>
-            <div class="sc-modal-actions">
+
+            <!-- Shared footer -->
+            <div class="sc-modal-footer">
                 <button class="sc-btn sc-btn--secondary" id="mod_settings_close_btn">Close</button>
-                <button class="sc-btn sc-btn--primary" id="mod_settings_save_btn">Save</button>
             </div>
         </div>
     </div>
