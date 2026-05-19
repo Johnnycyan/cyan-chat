@@ -19,6 +19,11 @@ var StreamerChat = (function () {
         "moderator:manage:banned_users",
         "moderator:manage:announcements",
         "moderator:manage:chat_settings",
+        "moderator:manage:blocked_terms",
+        "moderator:manage:unban_requests",
+        "moderator:manage:warnings",
+        "moderator:read:moderators",
+        "moderator:read:vips",
         "channel:manage:polls",
         "channel:manage:predictions",
         "channel:manage:moderators",
@@ -28,6 +33,7 @@ var StreamerChat = (function () {
         "channel:edit:commercial",
         "user:manage:chat_color",
         "user:read:moderated_channels",
+        "moderation:read",
     ].join(" ");
 
     var CLIENT_ID = ""; // populated from server token response
@@ -93,6 +99,11 @@ var StreamerChat = (function () {
     // Scroll-to-bottom tracking (streamer mode)
     var _atBottom = true;
     var _scrollObserver = null;
+
+    // EventSub WebSocket
+    var _eventSubWs = null;
+    var _eventSubKeepaliveTimer = null;
+    var _eventSubReconnecting = false;
 
     // ============================================================
     // Utility helpers
@@ -267,6 +278,7 @@ var StreamerChat = (function () {
                     $("#streamer_user_info").show();
                     if (data.is_mod && !Chat.info.preview) {
                         $("#streamer_bar").show();
+                        startEventSub();
                     } else if (!data.is_mod) {
                         showError("You are not a mod or broadcaster for this channel.");
                     }
@@ -1465,6 +1477,247 @@ var StreamerChat = (function () {
             .addClass(success ? "success" : "error")
             .text(msg)
             .show();
+    }
+
+    // ============================================================
+    // EventSub — channel.moderate (moderation action notices)
+    // ============================================================
+
+    function startEventSub() {
+        connectEventSubWs("wss://eventsub.wss.twitch.tv/ws");
+    }
+
+    function connectEventSubWs(url) {
+        if (_eventSubWs) {
+            try { _eventSubWs.close(); } catch (e) { }
+            _eventSubWs = null;
+        }
+        var ws = new WebSocket(url);
+        _eventSubWs = ws;
+
+        ws.onmessage = function (e) {
+            var msg;
+            try { msg = JSON.parse(e.data); } catch (ex) { return; }
+            handleEventSubMessage(msg, ws);
+        };
+
+        ws.onerror = function (e) {
+            console.error("[StreamerChat][EventSub] WebSocket error", e);
+        };
+
+        ws.onclose = function () {
+            clearEventSubKeepalive();
+            if (ws === _eventSubWs && !_eventSubReconnecting) {
+                // Reconnect after a short delay if we're still supposed to be connected
+                setTimeout(function () {
+                    if (Chat.info.streamerIsMod) {
+                        connectEventSubWs("wss://eventsub.wss.twitch.tv/ws");
+                    }
+                }, 5000);
+            }
+        };
+    }
+
+    function handleEventSubMessage(msg, ws) {
+        var msgType = msg.metadata && msg.metadata.message_type;
+        if (msgType === "session_welcome" || msgType === "session_keepalive") {
+            var timeout = msg.payload && msg.payload.session && msg.payload.session.keepalive_timeout_seconds;
+            resetEventSubKeepalive(timeout);
+        }
+        switch (msgType) {
+            case "session_welcome":
+                subscribeChannelModerate(msg.payload.session.id);
+                break;
+            case "session_reconnect": {
+                var reconnectUrl = msg.payload.session.reconnect_url;
+                _eventSubReconnecting = true;
+                var oldWs = ws;
+                connectEventSubWs(reconnectUrl);
+                // Close the old connection after the new one takes over
+                _eventSubWs.onopen = function () {
+                    _eventSubReconnecting = false;
+                    try { oldWs.close(); } catch (e) { }
+                };
+                break;
+            }
+            case "notification":
+                if (msg.metadata && msg.metadata.subscription_type === "channel.moderate") {
+                    handleModerateEvent(msg.payload.event);
+                }
+                break;
+            case "revocation":
+                console.warn("[StreamerChat][EventSub] Subscription revoked:", msg.payload);
+                break;
+        }
+    }
+
+    function resetEventSubKeepalive(timeoutSeconds) {
+        clearEventSubKeepalive();
+        var ms = ((timeoutSeconds || 10) + 10) * 1000;
+        _eventSubKeepaliveTimer = setTimeout(function () {
+            console.warn("[StreamerChat][EventSub] Keepalive timeout — reconnecting");
+            if (_eventSubWs) _eventSubWs.close();
+        }, ms);
+    }
+
+    function clearEventSubKeepalive() {
+        if (_eventSubKeepaliveTimer) {
+            clearTimeout(_eventSubKeepaliveTimer);
+            _eventSubKeepaliveTimer = null;
+        }
+    }
+
+    function subscribeChannelModerate(sessionId) {
+        var broadcasterID = Chat.info.channelID;
+        var moderatorID = Chat.info.streamerUserId;
+        refreshIfNeeded().then(function () {
+            return apiCall("POST", "/api/streamer/eventsub/subscribe", {
+                session_id: sessionId,
+                type: "channel.moderate",
+                version: "2",
+                condition: {
+                    broadcaster_user_id: broadcasterID,
+                    moderator_user_id: moderatorID,
+                },
+            });
+        }).then(function (data) {
+            console.log("[StreamerChat][EventSub] Subscribed to channel.moderate", data);
+        }).catch(function (e) {
+            console.error("[StreamerChat][EventSub] Subscription failed:", e);
+        });
+    }
+
+    function handleModerateEvent(event) {
+        if (!event) return;
+        var mod = event.moderator_user_login || "unknown";
+        var action = event.action;
+        var text;
+
+        // Shared-chat variants populate shared_chat_* fields instead of the
+        // regular ones. The action value may be the shared_chat_* name, or
+        // (per some docs examples) may still be the base action name. Normalise
+        // by checking the data fields when the action is ambiguous.
+        if (action === "ban" && !event.ban && event.shared_chat_ban) action = "shared_chat_ban";
+        if (action === "timeout" && !event.timeout && event.shared_chat_timeout) action = "shared_chat_timeout";
+        if (action === "unban" && !event.unban && event.shared_chat_unban) action = "shared_chat_unban";
+        if (action === "untimeout" && !event.untimeout && event.shared_chat_untimeout) action = "shared_chat_untimeout";
+        if (action === "delete" && !event.delete && event.shared_chat_delete) action = "shared_chat_delete";
+
+        switch (action) {
+            case "ban":
+                text = mod + " banned " + (event.ban && event.ban.user_login);
+                if (event.ban && event.ban.reason) text += " (\"" + event.ban.reason + "\")"; 
+                break;
+            case "shared_chat_ban": {
+                var scb = event.shared_chat_ban;
+                text = mod + " banned " + (scb && scb.user_login) + " (shared chat)";
+                if (scb && scb.reason) text += " (\"" + scb.reason + "\")"; 
+                break;
+            }
+            case "timeout": {
+                var to = event.timeout;
+                var dur = to && durationFromExpiresAt(to.expires_at);
+                text = mod + " timed out " + (to && to.user_login);
+                if (dur) text += " for " + dur;
+                if (to && to.reason) text += " (\"" + to.reason + "\")"; 
+                break;
+            }
+            case "shared_chat_timeout": {
+                var scto = event.shared_chat_timeout;
+                var dur = scto && durationFromExpiresAt(scto.expires_at);
+                text = mod + " timed out " + (scto && scto.user_login) + " (shared chat)";
+                if (dur) text += " for " + dur;
+                if (scto && scto.reason) text += " (\"" + scto.reason + "\")"; 
+                break;
+            }
+            case "unban":
+                text = mod + " unbanned " + (event.unban && event.unban.user_login);
+                break;
+            case "shared_chat_unban":
+                text = mod + " unbanned " + (event.shared_chat_unban && event.shared_chat_unban.user_login) + " (shared chat)";
+                break;
+            case "untimeout":
+                text = mod + " removed timeout from " + (event.untimeout && event.untimeout.user_login);
+                break;
+            case "shared_chat_untimeout":
+                text = mod + " removed timeout from " + (event.shared_chat_untimeout && event.shared_chat_untimeout.user_login) + " (shared chat)";
+                break;
+            case "delete":
+                text = mod + " deleted a message from " + (event.delete && event.delete.user_login);
+                break;
+            case "shared_chat_delete":
+                text = mod + " deleted a message from " + (event.shared_chat_delete && event.shared_chat_delete.user_login) + " (shared chat)";
+                break;
+            case "clear":
+                text = mod + " cleared chat";
+                break;
+            case "slow":
+                text = mod + " enabled slow mode (" + (event.slow && event.slow.wait_time_seconds) + "s)";
+                break;
+            case "slowoff":
+                text = mod + " disabled slow mode";
+                break;
+            case "subscribers":
+                text = mod + " enabled subscribers-only mode";
+                break;
+            case "subscribersoff":
+                text = mod + " disabled subscribers-only mode";
+                break;
+            case "emoteonly":
+                text = mod + " enabled emote-only mode";
+                break;
+            case "emoteonlyoff":
+                text = mod + " disabled emote-only mode";
+                break;
+            case "mod":
+                text = mod + " modded " + (event.mod && event.mod.user_login);
+                break;
+            case "unmod":
+                text = mod + " unmodded " + (event.unmod && event.unmod.user_login);
+                break;
+            case "vip":
+                text = mod + " gave VIP to " + (event.vip && event.vip.user_login);
+                break;
+            case "unvip":
+                text = mod + " removed VIP from " + (event.unvip && event.unvip.user_login);
+                break;
+            case "warn":
+                text = mod + " warned " + (event.warn && event.warn.user_login);
+                if (event.warn && event.warn.reason) text += ": \"" + event.warn.reason + "\"";
+                break;
+            default:
+                text = mod + " performed action: " + action;
+        }
+        showModActionNotice(text, action);
+    }
+
+    // Compute a human-readable duration string from an ISO-8601 expires_at timestamp.
+    // Twitch timeout payloads use expires_at rather than a duration field.
+    function durationFromExpiresAt(expiresAt) {
+        if (!expiresAt) return null;
+        var seconds = Math.round((new Date(expiresAt) - Date.now()) / 1000);
+        if (seconds <= 0) return null;
+        return formatModDuration(seconds);
+        if (seconds < 3600) {
+            var m = Math.floor(seconds / 60);
+            var s = seconds % 60;
+            return s > 0 ? m + "m " + s + "s" : m + "m";
+        }
+        var h = Math.floor(seconds / 3600);
+        var rem = seconds % 3600;
+        var m2 = Math.floor(rem / 60);
+        return m2 > 0 ? h + "h " + m2 + "m" : h + "h";
+    }
+
+    function showModActionNotice(text, actionType) {
+        var $line = $("<div class='mod-action-notice'></div>");
+        if (actionType) $line.addClass("mod-action-notice--" + actionType);
+        $line.text(text);
+        var $container = $("#chat_container");
+        $container.append($line);
+        // Cap at 200 notice lines to avoid unbounded growth
+        var $notices = $container.find(".mod-action-notice");
+        if ($notices.length > 200) $notices.first().remove();
     }
 
     // ============================================================

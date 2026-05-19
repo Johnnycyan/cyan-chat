@@ -162,6 +162,64 @@ body.streamerchat #chat_container::-webkit-scrollbar-thumb:hover {
   letter-spacing: 0.04em;
 }
 
+/* ---------- Mod action notices ---------- */
+.mod-action-notice {
+  padding: 3px 8px;
+  font-size: 0.85em;
+  color: #a0a0b0;
+  border-bottom: 1px solid #2a2a30;
+  border-left: 3px solid #555568;
+  background: rgba(60, 60, 80, 0.25);
+  font-style: italic;
+}
+
+/* Action-specific accent colors */
+.mod-action-notice--ban {
+  border-left-color: #c43535;
+  background: rgba(196, 53, 53, 0.1);
+  color: #d08080;
+}
+.mod-action-notice--timeout {
+  border-left-color: #c47a35;
+  background: rgba(196, 122, 53, 0.1);
+  color: #c8a070;
+}
+.mod-action-notice--unban,
+.mod-action-notice--untimeout {
+  border-left-color: #3c8c3c;
+  background: rgba(60, 140, 60, 0.1);
+  color: #80b880;
+}
+.mod-action-notice--delete {
+  border-left-color: #6060a0;
+  background: rgba(96, 96, 160, 0.1);
+}
+.mod-action-notice--warn {
+  border-left-color: #c4b035;
+  background: rgba(196, 176, 53, 0.1);
+  color: #c8c070;
+}
+.mod-action-notice--shared_chat_ban {
+  border-left-color: #c43535;
+  background: rgba(196, 53, 53, 0.07);
+  color: #c09090;
+}
+.mod-action-notice--shared_chat_timeout {
+  border-left-color: #c47a35;
+  background: rgba(196, 122, 53, 0.07);
+  color: #b89070;
+}
+.mod-action-notice--shared_chat_unban,
+.mod-action-notice--shared_chat_untimeout {
+  border-left-color: #3c8c3c;
+  background: rgba(60, 140, 60, 0.07);
+  color: #70a870;
+}
+.mod-action-notice--shared_chat_delete {
+  border-left-color: #6060a0;
+  background: rgba(96, 96, 160, 0.07);
+}
+
 /* ---------- Auth bar (top) ---------- */
 #streamer_auth_bar {
   position: fixed;

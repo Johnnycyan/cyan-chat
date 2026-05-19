@@ -1309,6 +1309,54 @@ func handleStreamerVips(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// POST /api/streamer/eventsub/subscribe  body: { session_id, type, version, condition }
+// Creates an EventSub WebSocket subscription on behalf of the authenticated user.
+func handleStreamerEventSubSubscribe(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userToken, ok := streamerUserToken(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		SessionID string                 `json:"session_id"`
+		Type      string                 `json:"type"`
+		Version   string                 `json:"version"`
+		Condition map[string]interface{} `json:"condition"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SessionID == "" || req.Type == "" {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	if req.Version == "" {
+		req.Version = "1"
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"type":      req.Type,
+		"version":   req.Version,
+		"condition": req.Condition,
+		"transport": map[string]string{
+			"method":     "websocket",
+			"session_id": req.SessionID,
+		},
+	})
+	status, body, err := streamerProxyRequest("POST", "/eventsub/subscriptions", userToken, bytes.NewReader(payload), "application/json")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(body)
+}
+
 func isRequestFromYourWebsite(r *http.Request) bool {
 	// Check if it's a same-origin request
 	origin := r.Header.Get("Origin")
@@ -2812,6 +2860,7 @@ func main() {
 	http.HandleFunc("/api/streamer/markers", handleStreamerMarkers)
 	http.HandleFunc("/api/streamer/mods", handleStreamerMods)
 	http.HandleFunc("/api/streamer/vips", handleStreamerVips)
+	http.HandleFunc("/api/streamer/eventsub/subscribe", handleStreamerEventSubSubscribe)
 	// serve the current directory as a static web server
 	staticFilesV2 := http.FileServer(http.Dir("./dist"))
 	http.Handle("/", staticFilesV2)
