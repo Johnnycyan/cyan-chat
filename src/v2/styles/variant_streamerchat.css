@@ -49,6 +49,15 @@ body.streamerchat #chat_container::-webkit-scrollbar-thumb:hover {
   background: #53535e;
 }
 
+/* ---------- Per-element font weight (settable via --sc-msg-weight / --sc-user-weight) ---------- */
+body.streamerchat .nick,
+body.streamerchat .mention {
+  font-weight: var(--sc-user-weight, 700);
+}
+body.streamerchat .message {
+  font-weight: var(--sc-msg-weight, 400);
+}
+
 .chat_line {
   padding: 4px 8px;
   border-bottom: 1px solid #383838;

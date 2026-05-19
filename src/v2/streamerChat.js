@@ -969,6 +969,8 @@ var StreamerChat = (function () {
         size: 2,
         height: 3,
         emoteScale: 1,
+        msgWeight: 400,
+        userWeight: 700,
         platformIndicator: "none",
         piStyle: "solid",
         piSides: "left",
@@ -1048,6 +1050,10 @@ var StreamerChat = (function () {
             appendCSS("emoteScale_" + sizeName, emoteScaleVal);
         }
 
+        // Font weights
+        root.style.setProperty("--sc-msg-weight", String(settings.msgWeight != null ? settings.msgWeight : DEFAULT_DISPLAY.msgWeight));
+        root.style.setProperty("--sc-user-weight", String(settings.userWeight != null ? settings.userWeight : DEFAULT_DISPLAY.userWeight));
+
         // Platform indicator
         applyPlatformIndicator(
             settings.platformIndicator || "none",
@@ -1076,6 +1082,8 @@ var StreamerChat = (function () {
         }
         $("#ds_size").val(String(settings.size != null ? settings.size : DEFAULT_DISPLAY.size));
         $("#ds_height").val(String(settings.height != null ? settings.height : DEFAULT_DISPLAY.height));
+        $("#ds_msg_weight").val(String(settings.msgWeight != null ? settings.msgWeight : DEFAULT_DISPLAY.msgWeight));
+        $("#ds_user_weight").val(String(settings.userWeight != null ? settings.userWeight : DEFAULT_DISPLAY.userWeight));
 
         // Emotes
         $("#ds_emote_scale").val(String(settings.emoteScale != null ? settings.emoteScale : DEFAULT_DISPLAY.emoteScale));
@@ -1111,6 +1119,8 @@ var StreamerChat = (function () {
             customFont: fontVal === -1 ? ($("#ds_custom_font").val().trim() || "") : "",
             size: parseInt($("#ds_size").val()),
             height: parseInt($("#ds_height").val()),
+            msgWeight: parseInt($("#ds_msg_weight").val()) || 400,
+            userWeight: parseInt($("#ds_user_weight").val()) || 700,
             emoteScale: parseInt($("#ds_emote_scale").val()) || 1,
             platformIndicator: $("#ds_pi_mode").val() || "none",
             piStyle: $("#ds_pi_style").val() || "solid",
@@ -1606,12 +1616,12 @@ var StreamerChat = (function () {
         switch (action) {
             case "ban":
                 text = mod + " banned " + (event.ban && event.ban.user_login);
-                if (event.ban && event.ban.reason) text += " (\"" + event.ban.reason + "\")"; 
+                if (event.ban && event.ban.reason) text += " (\"" + event.ban.reason + "\")";
                 break;
             case "shared_chat_ban": {
                 var scb = event.shared_chat_ban;
                 text = mod + " banned " + (scb && scb.user_login) + " (shared chat)";
-                if (scb && scb.reason) text += " (\"" + scb.reason + "\")"; 
+                if (scb && scb.reason) text += " (\"" + scb.reason + "\")";
                 break;
             }
             case "timeout": {
@@ -1619,7 +1629,7 @@ var StreamerChat = (function () {
                 var dur = to && durationFromExpiresAt(to.expires_at);
                 text = mod + " timed out " + (to && to.user_login);
                 if (dur) text += " for " + dur;
-                if (to && to.reason) text += " (\"" + to.reason + "\")"; 
+                if (to && to.reason) text += " (\"" + to.reason + "\")";
                 break;
             }
             case "shared_chat_timeout": {
@@ -1627,7 +1637,7 @@ var StreamerChat = (function () {
                 var dur = scto && durationFromExpiresAt(scto.expires_at);
                 text = mod + " timed out " + (scto && scto.user_login) + " (shared chat)";
                 if (dur) text += " for " + dur;
-                if (scto && scto.reason) text += " (\"" + scto.reason + "\")"; 
+                if (scto && scto.reason) text += " (\"" + scto.reason + "\")";
                 break;
             }
             case "unban":
