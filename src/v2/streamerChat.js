@@ -290,13 +290,19 @@ var StreamerChat = (function () {
         });
     }
 
+    var _refreshPromise = null;
+
     function refreshIfNeeded() {
         var expiry = parseInt(localStorage.getItem(LS_EXPIRY) || "0", 10);
         var oneHour = 3600 * 1000;
         if (expiry - Date.now() > oneHour) return Promise.resolve();
         var refresh = localStorage.getItem(LS_REFRESH);
         if (!refresh) return Promise.resolve();
-        return apiCall("POST", "/api/streamer/refresh", { refresh_token: refresh }, null)
+        // Deduplicate concurrent refresh calls — reuse the in-flight promise so
+        // two simultaneous callers don't both send the same refresh token (which
+        // would cause Twitch to rotate it, leaving the second call with a 401).
+        if (_refreshPromise) return _refreshPromise;
+        _refreshPromise = apiCall("POST", "/api/streamer/refresh", { refresh_token: refresh }, null)
             .then(function (data) {
                 localStorage.setItem(LS_TOKEN, data.access_token);
                 if (data.refresh_token) localStorage.setItem(LS_REFRESH, data.refresh_token);
@@ -305,7 +311,11 @@ var StreamerChat = (function () {
             })
             .catch(function (e) {
                 console.error("[StreamerChat] Token refresh failed:", e);
+            })
+            .finally(function () {
+                _refreshPromise = null;
             });
+        return _refreshPromise;
     }
 
     // ============================================================
