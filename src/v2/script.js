@@ -1816,7 +1816,7 @@ Chat = {
             if (badge.color) $badge.css("background-color", badge.color);
             if (badge.description === "Bot" && info.mod === "1") {
               $badge.css("background-color", "rgb(0, 173, 3)");
-              $modBadge.remove();
+              if ($modBadge) $modBadge.remove();
             }
             $badge.attr("src", badge.url);
             if (badge.description) $badge.attr("data-name", badge.description);
