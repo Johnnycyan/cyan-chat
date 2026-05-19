@@ -239,6 +239,7 @@ Chat = {
     sharedChatInitializing: false,
     sharedChatChannels: {},  // { channelID: { name, emotes, ffzModBadge, ffzVipBadge, profileImage, sevenConn } }
     sharedChatEventSource: null,
+    redeemEventSource: null,
     // Platform indicators
     platformIndicator:
       "platform_indicator" in $.QueryString
@@ -365,6 +366,11 @@ Chat = {
       return;
     }
 
+    // Don't open a second SSE connection if one is already active
+    if (Chat.info.sharedChatEventSource) {
+      return;
+    }
+
     // Subscribe to shared chat events (update and end only)
     fetch(`/api/shared-chat/subscribe?channel_id=${Chat.info.channelID}`);
 
@@ -413,6 +419,41 @@ Chat = {
             console.log('[TEMP DEBUG][SharedChat] Session ended');
             Chat.cleanupAllSharedChat();
             break;
+        }
+      } catch (e) {
+        console.error('[TEMP DEBUG][SharedChat] Error processing SSE event:', e);
+      }
+    };
+
+    eventSource.onerror = function (err) {
+      console.error('[TEMP DEBUG][SharedChat] SSE connection error:', err);
+    };
+  },
+
+  // TEMPORARY DEBUG - remove before production
+  startRedeemListener: function () {
+    if (!Chat.info.channelID) {
+      console.log('[TEMP DEBUG][Redeems] No channelID, skipping redeem SSE listener');
+      return;
+    }
+
+    if (Chat.info.redeemEventSource) {
+      return;
+    }
+
+    fetch(`/api/redeems/subscribe?channel_id=${Chat.info.channelID}`);
+
+    const eventSource = new EventSource(`/api/redeems/events?channel_id=${Chat.info.channelID}`);
+    Chat.info.redeemEventSource = eventSource;
+
+    eventSource.onmessage = function (event) {
+      try {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case 'connected':
+            console.log('[TEMP DEBUG][Redeems] SSE connected for channel', Chat.info.channelID);
+            break;
 
           case 'redeem': {
             // Cache the reward name and cost
@@ -426,7 +467,6 @@ Chat = {
               var remaining = [];
               Chat.info.redeemQueue.forEach(function (queued) {
                 if (queued.rewardId === data.reward_id) {
-                  // Inject reward metadata into the original IRC tags and render
                   queued.tags["_reward_title"] = data.reward_title;
                   queued.tags["_reward_cost"] = data.reward_cost || 0;
                   Chat.write(queued.nick, queued.tags, queued.messageText, "twitch");
@@ -452,14 +492,12 @@ Chat = {
                 "_reward_cost": data.reward_cost || 0
               };
 
-              // Fetch user color from Twitch API + load 7TV paints before rendering
               var redeemNick = data.user_login;
               var redeemUserId = data.user_id;
               var renderRedeem = function () {
                 Chat.write(redeemNick, redeemInfo, "", "twitch");
               };
 
-              // Fetch color and paints in parallel, then render
               var colorDone = false, paintDone = false;
               var tryRender = function () {
                 if (colorDone && paintDone) renderRedeem();
@@ -480,7 +518,6 @@ Chat = {
 
               if (redeemUserId && !Chat.info.seventvPaints[redeemNick]) {
                 Chat.loadUserPaints(redeemNick, redeemUserId);
-                // loadUserPaints is async, give it a moment then render
                 setTimeout(function () {
                   paintDone = true;
                   tryRender();
@@ -495,12 +532,12 @@ Chat = {
           }
         }
       } catch (e) {
-        console.error('[TEMP DEBUG][SharedChat] Error processing SSE event:', e);
+        console.error('[TEMP DEBUG][Redeems] Error processing SSE event:', e);
       }
     };
 
     eventSource.onerror = function (err) {
-      console.error('[TEMP DEBUG][SharedChat] SSE connection error:', err);
+      console.error('[TEMP DEBUG][Redeems] SSE connection error:', err);
     };
   },
 
@@ -920,6 +957,12 @@ Chat = {
         Chat.info.channelID = res.data[0].id;
         Chat.loadEmotes(Chat.info.channelID);
         seven_ws(Chat.info.channel);
+
+        // Streamer chat mode: start the dedicated redeem SSE listener immediately
+        // so channel point redemptions arrive even without a shared chat session.
+        if (Chat.info.streamerChat) {
+          Chat.startRedeemListener();
+        }
 
         client_id = res.client_id;
 
@@ -1685,6 +1728,24 @@ Chat = {
 
         $redeemLine.append($content);
         Chat.info.lines.push($redeemLine.wrap("<div>").parent().html());
+        return;
+      }
+
+      // Sub/resub/giftsub notification: styled notification line
+      if (info["_sub_notification"]) {
+        var $subLine = $("<div></div>");
+        $subLine.addClass("chat_line sub-notification");
+        if (Chat.info.animate) $subLine.addClass("animate");
+        $subLine.attr("data-nick", nick);
+        $subLine.attr("data-time", Date.now());
+        $subLine.attr("data-id", info.id || ("sub-" + Date.now()));
+
+        var $subContent = $("<span class='sub-notification-content'></span>");
+        $subContent.append("<svg class='sub-star-icon' viewBox='0 0 20 20'><path fill='currentColor' d='M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.49L10 14.27l-4.94 2.43.94-5.49-4-3.9 5.53-.8z'/></svg>");
+        $subContent.append("<span class='sub-notification-text'>" + escapeHtml(message) + "</span>");
+
+        $subLine.append($subContent);
+        Chat.info.lines.push($subLine.wrap("<div>").parent().html());
         return;
       }
 
@@ -3107,13 +3168,49 @@ Chat = {
               Chat.write(nick, message.tags, message.params[1], "twitch");
               return;
 
-            case "USERNOTICE":
-              // Announcements are sent as USERNOTICE with msg-id=announcement.
-              if (message.tags && message.tags["msg-id"] === "announcement" && message.params[1]) {
-                var aNick = message.tags["login"] || (message.prefix ? message.prefix.split("!")[0] : "");
-                Chat.write(aNick, message.tags, message.params[1], "twitch");
+            case "USERNOTICE": {
+              var uTags = message.tags || {};
+              var uMsgId = uTags["msg-id"];
+              var uNick = uTags["login"] || (message.prefix ? message.prefix.split("!")[0] : "");
+
+              // Announcements always show
+              if (uMsgId === "announcement" && message.params[1]) {
+                Chat.write(uNick, uTags, message.params[1], "twitch");
+                return;
+              }
+
+              // Subscriptions and gift subs: only show in streamer chat mode
+              if (Chat.info.streamerChat && (uMsgId === "sub" || uMsgId === "resub" || uMsgId === "subgift" || uMsgId === "submysterygift")) {
+                // Decode system-msg (IRC tag values use \s for space, \\ for backslash)
+                var rawSysMsg = (uTags["system-msg"] || "").replace(/\\s/g, " ").replace(/\\\\/g, "\\").trim();
+                var subDisplayText = rawSysMsg;
+                if (!subDisplayText) {
+                  var uSubPlan = uTags["msg-param-sub-plan"] || "1000";
+                  var uTier = uSubPlan === "Prime" ? "Prime" : uSubPlan === "3000" ? "Tier 3" : uSubPlan === "2000" ? "Tier 2" : "Tier 1";
+                  var uDName = uTags["display-name"] || uNick;
+                  if (uMsgId === "sub") {
+                    subDisplayText = uDName + " just subscribed (" + uTier + ")!";
+                  } else if (uMsgId === "resub") {
+                    var uMonths = uTags["msg-param-cumulative-months"] || "?";
+                    subDisplayText = uDName + " resubscribed for " + uMonths + " months (" + uTier + ")!";
+                  } else if (uMsgId === "subgift") {
+                    var uRecipient = uTags["msg-param-recipient-display-name"] || uTags["msg-param-recipient-user-name"] || "?";
+                    subDisplayText = uDName + " gifted a " + uTier + " sub to " + uRecipient + "!";
+                  } else if (uMsgId === "submysterygift") {
+                    var uCount = uTags["msg-param-mass-gift-count"] || "?";
+                    subDisplayText = uDName + " is gifting " + uCount + " " + uTier + " subs!";
+                  }
+                } else if (uMsgId === "resub" && message.params[1]) {
+                  // Append the subscriber's optional message
+                  subDisplayText += " \u201C" + message.params[1] + "\u201D";
+                }
+                if (subDisplayText) {
+                  uTags["_sub_notification"] = true;
+                  Chat.write(uNick, uTags, subDisplayText, "twitch");
+                }
               }
               return;
+            }
           }
         });
       };

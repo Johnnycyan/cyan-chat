@@ -357,6 +357,32 @@ body {
   font-weight: bold;
 }
 
+/* Subscription notification line */
+.sub-notification {
+  background-color: rgba(145, 70, 255, 0.15);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.sub-notification .sub-notification-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35em;
+}
+
+.sub-notification .sub-notification-text {
+  color: #ddd;
+}
+
+.sub-notification .sub-star-icon {
+  width: 1em;
+  height: 1em;
+  color: #a970ff;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 /* Gigantified Emote Power-up */
 .gigantified-emote {
   position: relative;

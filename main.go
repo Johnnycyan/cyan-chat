@@ -68,14 +68,12 @@ type SharedChatEvent struct {
 	UserInput    string                  `json:"user_input,omitempty"`
 }
 
-// EventSubChannel tracks SSE clients and PubSub for one broadcaster
+// EventSubChannel tracks SSE clients for shared chat events for one broadcaster.
 type EventSubChannel struct {
 	ChannelID       string
 	SSEClients      map[chan SharedChatEvent]bool
 	SSEMutex        sync.Mutex
 	Cancel          context.CancelFunc
-	PubSubConn      *websocket.Conn
-	PubSubMutex     sync.Mutex
 	SubscriptionIDs []string // Twitch EventSub subscription IDs for cleanup
 	SubIDsMutex     sync.Mutex
 }
@@ -83,6 +81,22 @@ type EventSubChannel struct {
 var (
 	eventSubChannels = make(map[string]*EventSubChannel)
 	eventSubMutex    sync.RWMutex
+)
+
+// RedeemChannel tracks PubSub + SSE clients for channel point redemptions.
+// Completely separate from shared-chat EventSub infrastructure.
+type RedeemChannel struct {
+	ChannelID  string
+	Cancel     context.CancelFunc
+	ConnMu     sync.Mutex
+	Conn       *websocket.Conn
+	SSEClients map[chan SharedChatEvent]bool
+	SSEMu      sync.Mutex
+}
+
+var (
+	redeemChannels = make(map[string]*RedeemChannel)
+	redeemMu       sync.RWMutex
 )
 
 // ============================================================
@@ -1886,7 +1900,7 @@ func broadcastToSSEClients(esc *EventSubChannel, event SharedChatEvent) {
 
 // startEventSubForChannel registers a channel and subscribes via the shared pool
 func startEventSubForChannel(channelID string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 
 	esc := &EventSubChannel{
 		ChannelID:  channelID,
@@ -1902,9 +1916,6 @@ func startEventSubForChannel(channelID string) {
 	}
 	eventSubChannels[channelID] = esc
 	eventSubMutex.Unlock()
-
-	// Start PubSub for channel point redemptions
-	go startPubSubForChannel(ctx, esc, channelID)
 
 	log.Printf("[TEMP DEBUG][SharedChat] Starting EventSub for channel %s via shared pool", channelID)
 
@@ -2368,8 +2379,10 @@ func handleEventSubNotification(esc *EventSubChannel, payload json.RawMessage) {
 // PubSub for Channel Point Redemptions
 // ============================================================
 
-// startPubSubForChannel connects to Twitch PubSub and listens for community points events
-func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID string) {
+// startPubSubForChannel connects to Twitch PubSub and listens for community points events.
+// setConn (optional) is called with the live WebSocket connection so callers can close it for cleanup.
+// broadcast is called for each redeem event received.
+func startPubSubForChannel(ctx context.Context, channelID string, setConn func(*websocket.Conn), broadcast func(SharedChatEvent)) {
 	backoff := time.Second
 
 	for {
@@ -2391,9 +2404,9 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 			continue
 		}
 
-		esc.PubSubMutex.Lock()
-		esc.PubSubConn = conn
-		esc.PubSubMutex.Unlock()
+		if setConn != nil {
+			setConn(conn)
+		}
 
 		backoff = time.Second // Reset backoff on successful connect
 
@@ -2417,7 +2430,7 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 		// Start PING ticker (every 4 minutes)
 		pingTicker := time.NewTicker(4 * time.Minute)
 
-		err = processPubSubMessages(ctx, esc, conn, channelID, pingTicker)
+		err = processPubSubMessages(ctx, conn, channelID, pingTicker, broadcast)
 		pingTicker.Stop()
 		conn.Close()
 
@@ -2438,7 +2451,7 @@ func startPubSubForChannel(ctx context.Context, esc *EventSubChannel, channelID 
 }
 
 // processPubSubMessages reads and handles PubSub messages
-func processPubSubMessages(ctx context.Context, esc *EventSubChannel, conn *websocket.Conn, channelID string, pingTicker *time.Ticker) error {
+func processPubSubMessages(ctx context.Context, conn *websocket.Conn, channelID string, pingTicker *time.Ticker, broadcast func(SharedChatEvent)) error {
 	// Channel for signaling PONG received
 	pongCh := make(chan struct{}, 1)
 	errCh := make(chan error, 1)
@@ -2514,13 +2527,13 @@ func processPubSubMessages(ctx context.Context, esc *EventSubChannel, conn *webs
 			return nil
 
 		case "MESSAGE":
-			handlePubSubMessage(esc, msg.Data, channelID)
+			handlePubSubMessage(msg.Data, channelID, broadcast)
 		}
 	}
 }
 
 // handlePubSubMessage processes a PubSub MESSAGE
-func handlePubSubMessage(esc *EventSubChannel, data json.RawMessage, channelID string) {
+func handlePubSubMessage(data json.RawMessage, channelID string, broadcast func(SharedChatEvent)) {
 	var msgData struct {
 		Topic   string `json:"topic"`
 		Message string `json:"message"`
@@ -2580,10 +2593,10 @@ func handlePubSubMessage(esc *EventSubChannel, data json.RawMessage, channelID s
 		UserInput:   r.UserInput,
 	}
 
-	broadcastToSSEClients(esc, event)
+	broadcast(event)
 }
 
-// stopEventSubForChannel stops EventSub + PubSub for a channel
+// stopEventSubForChannel stops EventSub for a channel
 func stopEventSubForChannel(channelID string) {
 	eventSubMutex.RLock()
 	esc, exists := eventSubChannels[channelID]
@@ -2609,17 +2622,202 @@ func stopEventSubForChannel(channelID string) {
 	delete(esPool.subscribed, channelID)
 	esPool.mu.Unlock()
 
-	esc.Cancel() // Stops PubSub goroutine
-	// Close PubSub connection
-	esc.PubSubMutex.Lock()
-	if esc.PubSubConn != nil {
-		esc.PubSubConn.Close()
-	}
-	esc.PubSubMutex.Unlock()
+	esc.Cancel()
 
 	eventSubMutex.Lock()
 	delete(eventSubChannels, channelID)
 	eventSubMutex.Unlock()
+}
+
+// ============================================================
+// Channel Point Redemptions — dedicated SSE + PubSub
+// ============================================================
+
+// startRedeemForChannel creates a RedeemChannel and begins a PubSub connection for it.
+func startRedeemForChannel(channelID string) {
+	// Double-checked locking to avoid duplicate channels
+	redeemMu.RLock()
+	_, exists := redeemChannels[channelID]
+	redeemMu.RUnlock()
+	if exists {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rc := &RedeemChannel{
+		ChannelID:  channelID,
+		Cancel:     cancel,
+		SSEClients: make(map[chan SharedChatEvent]bool),
+	}
+
+	redeemMu.Lock()
+	if _, exists := redeemChannels[channelID]; exists {
+		redeemMu.Unlock()
+		cancel()
+		return
+	}
+	redeemChannels[channelID] = rc
+	redeemMu.Unlock()
+
+	go startPubSubForChannel(ctx, channelID,
+		func(conn *websocket.Conn) {
+			rc.ConnMu.Lock()
+			rc.Conn = conn
+			rc.ConnMu.Unlock()
+		},
+		func(event SharedChatEvent) {
+			rc.SSEMu.Lock()
+			defer rc.SSEMu.Unlock()
+			for ch := range rc.SSEClients {
+				select {
+				case ch <- event:
+				default:
+					log.Printf("[TEMP DEBUG][Redeems] SSE client channel full, dropping event")
+				}
+			}
+		},
+	)
+}
+
+// stopRedeemForChannel cancels PubSub and removes the channel from the map.
+func stopRedeemForChannel(channelID string) {
+	redeemMu.RLock()
+	rc, exists := redeemChannels[channelID]
+	redeemMu.RUnlock()
+	if !exists {
+		return
+	}
+
+	log.Printf("[TEMP DEBUG][Redeems] Stopping PubSub for channel %s", channelID)
+	rc.Cancel()
+	rc.ConnMu.Lock()
+	if rc.Conn != nil {
+		rc.Conn.Close()
+	}
+	rc.ConnMu.Unlock()
+
+	redeemMu.Lock()
+	delete(redeemChannels, channelID)
+	redeemMu.Unlock()
+}
+
+// handleRedeemSubscribe ensures a PubSub listener is running for the given channel.
+func handleRedeemSubscribe(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	channelID := r.URL.Query().Get("channel_id")
+	if channelID == "" {
+		http.Error(w, "channel_id required", http.StatusBadRequest)
+		return
+	}
+
+	redeemMu.RLock()
+	_, exists := redeemChannels[channelID]
+	redeemMu.RUnlock()
+
+	if !exists {
+		go startRedeemForChannel(channelID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleRedeemEvents streams channel point redemption events as SSE.
+func handleRedeemEvents(w http.ResponseWriter, r *http.Request) {
+	if !isRequestFromYourWebsite(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	channelID := r.URL.Query().Get("channel_id")
+	if channelID == "" {
+		http.Error(w, "channel_id required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Auto-start PubSub if not already running
+	redeemMu.RLock()
+	rc, exists := redeemChannels[channelID]
+	redeemMu.RUnlock()
+	if !exists {
+		startRedeemForChannel(channelID)
+		// Wait briefly for goroutine to register the channel
+		for i := 0; i < 50; i++ {
+			time.Sleep(100 * time.Millisecond)
+			redeemMu.RLock()
+			rc, exists = redeemChannels[channelID]
+			redeemMu.RUnlock()
+			if exists {
+				break
+			}
+		}
+		if !exists {
+			http.Error(w, "Failed to start redeem listener", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	eventChan := make(chan SharedChatEvent, 10)
+	rc.SSEMu.Lock()
+	rc.SSEClients[eventChan] = true
+	rc.SSEMu.Unlock()
+
+	log.Printf("[TEMP DEBUG][Redeems] SSE client connected for channel %s", channelID)
+
+	fmt.Fprintf(w, "data: {\"type\":\"connected\"}\n\n")
+	flusher.Flush()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			rc.SSEMu.Lock()
+			delete(rc.SSEClients, eventChan)
+			remainingClients := len(rc.SSEClients)
+			rc.SSEMu.Unlock()
+			log.Printf("[TEMP DEBUG][Redeems] SSE client disconnected for channel %s (%d remaining)", channelID, remainingClients)
+			if remainingClients == 0 {
+				go func() {
+					time.Sleep(30 * time.Second)
+					redeemMu.RLock()
+					currentRC, exists := redeemChannels[channelID]
+					redeemMu.RUnlock()
+					if !exists {
+						return
+					}
+					currentRC.SSEMu.Lock()
+					count := len(currentRC.SSEClients)
+					currentRC.SSEMu.Unlock()
+					if count == 0 {
+						log.Printf("[TEMP DEBUG][Redeems] No SSE clients for %s after grace period, stopping", channelID)
+						stopRedeemForChannel(channelID)
+					}
+				}()
+			}
+			return
+		case event := <-eventChan:
+			data, err := json.Marshal(event)
+			if err != nil {
+				log.Printf("[TEMP DEBUG][Redeems] Error marshaling event: %v", err)
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
 }
 
 // ============================================================
@@ -2840,6 +3038,8 @@ func main() {
 	http.HandleFunc("/admin/active", handleAdminActive)
 	http.HandleFunc("/api/shared-chat/subscribe", handleSharedChatSubscribe)
 	http.HandleFunc("/api/shared-chat/events", handleSharedChatEvents)
+	http.HandleFunc("/api/redeems/subscribe", handleRedeemSubscribe)
+	http.HandleFunc("/api/redeems/events", handleRedeemEvents)
 	http.HandleFunc("/api/yt-colors", handleYTColors)
 	http.HandleFunc("/admin/yt-colors", handleAdminYTColors)
 	http.HandleFunc("/api/admin/yt-colors", handleAdminYTColorsAPI)
