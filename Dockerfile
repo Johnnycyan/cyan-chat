@@ -24,7 +24,10 @@ COPY youtube-websocket/src/ ./src/
 COPY youtube-websocket/tsconfig.json ./
 
 # ---- Stage 4: Final runtime image ----
-FROM oven/bun:latest
+# Bun ships its own root store; 1.4.3 and earlier still trust the compromised
+# eMudhra/emSign intermediates. The fix (oven-sh/bun#46300) is only in canary so far.
+# TODO: switch back to oven/bun:latest once Bun 1.4.4 is released.
+FROM oven/bun:canary
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
