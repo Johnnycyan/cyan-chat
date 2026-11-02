@@ -83,6 +83,9 @@ if (Chat.info.yt) {
 				$('.chat_line[data-user-id="' + data.externalChannelId + '"]').remove();
 			}, 200);
 		}
+		else if (Chat.isHiddenUser(data.author.name.replace("@", "").trim()) || (data.type !== "superchat" && Chat.isHiddenCommand(data.message))) {
+			return
+		}
 		else if (data.type === "superchat") {
 			let info = formatMessage(data)
 			let msg = data.hasMessage ? `${data.purchase_amount} ${data.message}` : data.purchase_amount

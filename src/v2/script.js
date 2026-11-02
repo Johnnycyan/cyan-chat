@@ -42,7 +42,7 @@ var YOUTUBE_BADGE_SRC = "data:image/svg+xml," + encodeURIComponent(YOUTUBE_SVG);
 
 // ── BTTV / FFZ emote-modifier support ────────────────────────────────────────
 const BTTV_MODIFIER_SET = new Set(['w!', 'c!', 'z!', 'h!', 'v!', 'l!', 'r!', 'p!', 's!']);
-const FFZ_MODIFIER_SET  = new Set(['ffzX', 'ffzY', 'ffzCursed', 'ffzW']);
+const FFZ_MODIFIER_SET = new Set(['ffzX', 'ffzY', 'ffzCursed', 'ffzW']);
 
 /**
  * Inject the combined visual effects of `modifiers` into an emote `<img>` HTML string.
@@ -1819,6 +1819,22 @@ Chat = {
     return $chatLine;
   },
 
+  // Shared by every chat service so hide_commands applies everywhere.
+  isHiddenCommand: function (text) {
+    if (!Chat.info.hideCommands) return false;
+    text = String(text || "");
+    return /^!.+/.test(text) || text.toLowerCase() === "#presence";
+  },
+
+  // Shared by every chat service so bots/block/allow apply everywhere.
+  isHiddenUser: function (nick) {
+    nick = String(nick || "").toLowerCase();
+    if (!Chat.info.showBots && Chat.info.bots.includes(nick)) return true;
+    if (Chat.info.blockedUsers && Chat.info.blockedUsers.includes(nick)) return true;
+    if (Chat.info.allowedUsers && !Chat.info.allowedUsers.includes(nick)) return true;
+    return false;
+  },
+
   write: function (nick, info, message, service) {
     nick = Chat.sanitizeUsername(nick);
     if (info) {
@@ -3262,36 +3278,13 @@ Chat = {
 
               // #endregion COMMANDS
 
-              if (Chat.info.hideCommands) {
-                if (/^!.+/.test(message.params[1])) return;
-                if (message.params[1].toLowerCase() === "#presence") return;
-              }
+              if (Chat.isHiddenCommand(message.params[1])) return;
 
-              if (!Chat.info.showBots) {
-                if (Chat.info.bots.includes(nick)) {
-                  Chat.info.colors[nick] = Chat.getUserColor(nick, message.tags);
-                  Chat.loadUserPaints(nick, message.tags["user-id"]);
-                  return;
-                }
-              }
-
-              if (Chat.info.blockedUsers) {
-                if (Chat.info.blockedUsers.includes(nick)) {
-                  // console.log("Cyan Chat: Hiding blocked user message but getting color...'" + nick + "'");
-                  Chat.info.colors[nick] = Chat.getUserColor(nick, message.tags);
-                  Chat.loadUserPaints(nick, message.tags["user-id"]);
-                  return;
-                }
-              }
-
-              // Whitelist check - if allowedUsers is set, only show messages from those users
-              if (Chat.info.allowedUsers) {
-                if (!Chat.info.allowedUsers.includes(nick.toLowerCase())) {
-                  // console.log("Cyan Chat: Hiding non-whitelisted user message but getting color...'" + nick + "'");
-                  Chat.info.colors[nick] = Chat.getUserColor(nick, message.tags);
-                  Chat.loadUserPaints(nick, message.tags["user-id"]);
-                  return;
-                }
+              // Hidden bots, blocked users, and non-whitelisted users: skip the message but still get color
+              if (Chat.isHiddenUser(nick)) {
+                Chat.info.colors[nick] = Chat.getUserColor(nick, message.tags);
+                Chat.loadUserPaints(nick, message.tags["user-id"]);
+                return;
               }
 
               if (!Chat.info.hideBadges) {
